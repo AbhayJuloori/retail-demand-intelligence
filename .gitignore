@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+
+# Data and experiment artifacts (raw/processed data only, not source files)
+data/raw/
+data/processed/
+mlruns/
+
+# Frontend
+node_modules/
+.next/
