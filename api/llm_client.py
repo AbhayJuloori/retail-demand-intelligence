@@ -45,7 +45,11 @@ class LLMClient:
         avg_demand = sku_data.get("avg_daily_demand", 0)
         recommended_qty = sku_data.get("recommended_order_qty", 0)
         trigger_date = sku_data.get("trigger_date", "N/A")
+        risk_score = round(float(sku_data.get("stockout_risk_score", 0)), 2)
         top_features = sku_data.get("top_shap_features", [])
+        demand_drivers = ""
+        if top_features:
+            demand_drivers = f"Top demand drivers: {', '.join(str(feature) for feature in top_features[:3])}\n"
 
         system = (
             "You are a supply chain analyst. Give a concise 3-line insight for a retail SKU. Format exactly as:\n"
@@ -57,10 +61,11 @@ class LLMClient:
             f"SKU: {sku_id}\n"
             f"Inventory Status: {status}\n"
             f"Days until stockout: {days_until_stockout}\n"
+            f"Risk score: {risk_score:.2f}/1.0\n"
             f"Avg daily demand: {avg_demand:.1f} units\n"
             f"Recommended order qty: {recommended_qty:.0f} units\n"
             f"Order trigger date: {trigger_date}\n"
-            f"Top demand drivers: {top_features}"
+            f"{demand_drivers}"
         )
         return system + "\n\n" + user
 

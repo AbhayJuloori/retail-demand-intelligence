@@ -6,6 +6,7 @@ import json
 import logging
 import pickle
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -20,6 +21,8 @@ from ml.inventory import compute_inventory_state
 logger = logging.getLogger(__name__)
 
 _cache: dict[str, tuple[object, dict[str, Any], dict[str, tuple[float, float]]]] = {}
+_shap_cache: dict[str, list[str]] = {}
+_CALENDAR_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "calendar.csv"
 
 
 def _latest_successful_run_id(experiment_name: str) -> str:
@@ -61,6 +64,59 @@ def load_artifacts(
     artifacts = (booster, prophet_models, weights)
     _cache[resolved_run_id] = artifacts
     return artifacts
+
+
+def _load_top_shap_features(run_id: str) -> list[str]:
+    if run_id in _shap_cache:
+        return _shap_cache[run_id]
+
+    client = MlflowClient()
+    try:
+        shap_path = client.download_artifacts(run_id, "shap_importance.json")
+        with open(shap_path, "r", encoding="utf-8") as file_obj:
+            shap_importance = json.load(file_obj)
+    except Exception:
+        top_features: list[str] = []
+    else:
+        top_features = [
+            feature
+            for feature, _ in sorted(shap_importance.items(), key=lambda item: float(item[1]), reverse=True)[:3]
+        ]
+
+    _shap_cache[run_id] = top_features
+    return top_features
+
+
+def _sku_state(sku_id: str) -> str | None:
+    parts = sku_id.split("_")
+    for part in reversed(parts):
+        if part in {"CA", "TX", "WI"}:
+            return part
+    return None
+
+
+def _future_calendar_flags(sku_id: str, forecast_df: pd.DataFrame) -> pd.DataFrame:
+    flags = pd.DataFrame(
+        {
+            "snap_flag": np.zeros(len(forecast_df), dtype=int),
+            "has_event": np.zeros(len(forecast_df), dtype=int),
+        }
+    )
+    state = _sku_state(sku_id)
+    if state is None or not _CALENDAR_PATH.exists():
+        return flags
+
+    try:
+        calendar = pd.read_csv(_CALENDAR_PATH, usecols=["date", f"snap_{state}", "event_name_1"])
+    except Exception:
+        return flags
+
+    dates = pd.DataFrame({"date": pd.to_datetime(forecast_df["ds"]).dt.normalize()})
+    calendar["date"] = pd.to_datetime(calendar["date"]).dt.normalize()
+    merged = dates.merge(calendar, on="date", how="left")
+    flags["snap_flag"] = merged[f"snap_{state}"].fillna(0).astype(int).to_numpy()
+    flags["has_event"] = merged["event_name_1"].notna().astype(int).to_numpy()
+    return flags
 
 
 def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame) -> pd.DataFrame:
@@ -109,6 +165,9 @@ def predict(
     prophet_model = prophet_models[sku_id]
     forecast_df = forecast_prophet(prophet_model, horizon)
     future_features_df = _future_lightgbm_features(prophet_model, forecast_df)
+    calendar_flags = _future_calendar_flags(sku_id, forecast_df)
+    future_features_df["snap_flag"] = calendar_flags["snap_flag"]
+    future_features_df["has_event"] = calendar_flags["has_event"]
     lgbm_preds = forecast_lightgbm(booster, future_features_df)
     w_prophet, w_lightgbm = weights.get(sku_id, (0.5, 0.5))
     blended = blend(forecast_df["yhat"].to_numpy(), lgbm_preds, w_prophet, w_lightgbm)
@@ -133,9 +192,12 @@ def predict(
         "run_id": resolved_run_id,
         "w_prophet": w_prophet,
         "w_lightgbm": w_lightgbm,
+        "top_3_features": _load_top_shap_features(resolved_run_id),
     }
     if current_stock is not None:
-        result["inventory_state"] = compute_inventory_state(sku_id, current_stock, forecast_df)
+        inventory_forecast_df = forecast_df.copy()
+        inventory_forecast_df["yhat"] = blended
+        result["inventory_state"] = compute_inventory_state(sku_id, current_stock, inventory_forecast_df)
 
     logger.info("Generated %s-day forecast for %s from run %s at %s", horizon, sku_id, resolved_run_id, datetime.now())
     return result

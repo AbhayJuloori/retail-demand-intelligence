@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import math
 from datetime import date, timedelta
+from typing import TYPE_CHECKING
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 def reorder_point(avg_daily_demand: float, lead_time_days: int, safety_stock_units: float) -> float:
@@ -30,6 +32,24 @@ def classify_status(days_until_stockout: int, safety_stock_days: float) -> str:
     if days_until_stockout <= safety_stock_days * 2:
         return "AT RISK"
     return "OK"
+
+
+def stockout_risk_score(days_until_stockout: int, lead_time_days: int = 7) -> float:
+    """Returns 0.0-1.0 risk score. 1.0 = stockout imminent, 0.0 = safe."""
+    if days_until_stockout <= 0:
+        return 1.0
+    if days_until_stockout <= lead_time_days:
+        return 0.8
+
+    medium_risk_days = lead_time_days * 3
+    if days_until_stockout <= medium_risk_days:
+        span = medium_risk_days - lead_time_days
+        return 0.8 - ((days_until_stockout - lead_time_days) / span) * 0.5
+
+    if days_until_stockout >= 90:
+        return 0.0
+    span = 90 - medium_risk_days
+    return 0.3 - ((days_until_stockout - medium_risk_days) / span) * 0.3
 
 
 def compute_inventory_state(
@@ -66,6 +86,7 @@ def compute_inventory_state(
         "reorder_point": rop,
         "eoq": eq,
         "days_until_stockout": days_until_stockout,
+        "stockout_risk_score": stockout_risk_score(days_until_stockout, lead_time_days),
         "status": status,
         "recommended_order_qty": max(0.0, eq - current_stock),
         "trigger_date": trigger_date.isoformat(),

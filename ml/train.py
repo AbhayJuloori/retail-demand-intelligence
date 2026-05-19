@@ -11,9 +11,20 @@ from pathlib import Path
 import mlflow
 import mlflow.lightgbm
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
-from ml.forecasting import blend, ensemble_weights, forecast_lightgbm, forecast_prophet, train_lightgbm, train_prophet
+from ml.forecasting import (
+    FEATURE_COLUMNS,
+    blend,
+    ensemble_weights,
+    forecast_lightgbm,
+    forecast_prophet,
+    rolling_backtest,
+    train_lightgbm,
+    train_prophet,
+    wrmsse,
+)
 from ml.pipeline import engineer_features, load_m5_data, make_synthetic_data, preprocess, train_val_split
 
 logger = logging.getLogger(__name__)
@@ -62,6 +73,32 @@ def main(
                 "lgbm_random_state": 42,
             }
         )
+        try:
+            import shap
+
+            shap_df = val_df.dropna(subset=FEATURE_COLUMNS + ["sales"])
+            if not shap_df.empty:
+                explainer = shap.TreeExplainer(booster)
+                shap_values = explainer.shap_values(shap_df[FEATURE_COLUMNS])
+                if isinstance(shap_values, list):
+                    shap_values = shap_values[0]
+                shap_array = np.asarray(shap_values, dtype=float)
+                if shap_array.ndim == 3:
+                    shap_array = shap_array[:, :, 0]
+                mean_abs_shap = np.abs(shap_array).mean(axis=0)
+                ranked_features = sorted(
+                    zip(FEATURE_COLUMNS, mean_abs_shap, strict=False),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )[:10]
+                shap_importance = {feature: float(value) for feature, value in ranked_features}
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    shap_path = Path(tmp_dir) / "shap_importance.json"
+                    with shap_path.open("w", encoding="utf-8") as file_obj:
+                        json.dump(shap_importance, file_obj, indent=2)
+                    mlflow.log_artifact(str(shap_path))
+        except Exception:
+            pass
 
         prophet_models: dict[str, object] = {}
         weights_by_sku: dict[str, tuple[float, float]] = {}
@@ -94,25 +131,69 @@ def main(
             actuals = np.concatenate(all_actuals)
             predictions = np.concatenate(all_preds)
             val_rmse = float(np.sqrt(np.mean((actuals - predictions) ** 2)))
+            train_scale = float(
+                train_df.sort_values(["sku_id", "date"]).groupby("sku_id")["sales"].diff().pow(2).mean()
+            )
+            val_wrmsse = wrmsse(pd.Series(actuals), pd.Series(predictions), train_scale)
         else:
             val_rmse = float("nan")
+            val_wrmsse = float("nan")
+
+        backtest_results: dict[str, dict] = {}
+        for backtest_sku in skus[:5]:
+            result = rolling_backtest(feature_df, backtest_sku, booster, prophet_models, weights_by_sku)
+            if result:
+                backtest_results[backtest_sku] = result
+        backtest_scores = [
+            result["avg_ensemble_rmse"]
+            for result in backtest_results.values()
+            if not np.isnan(float(result["avg_ensemble_rmse"]))
+        ]
+        backtest_avg_ensemble_rmse = float(np.mean(backtest_scores)) if backtest_scores else float("nan")
 
         mlflow.log_metric("val_rmse", val_rmse)
+        mlflow.log_metric("val_wrmsse", val_wrmsse)
+        mlflow.log_metric("backtest_avg_ensemble_rmse", backtest_avg_ensemble_rmse)
         mlflow.lightgbm.log_model(booster, "lightgbm_model")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
             prophet_path = tmp_path / "prophet_models.pkl"
             weights_path = tmp_path / "ensemble_weights.json"
+            backtest_path = tmp_path / "backtest_results.json"
             with prophet_path.open("wb") as file_obj:
                 pickle.dump(prophet_models, file_obj)
             with weights_path.open("w", encoding="utf-8") as file_obj:
                 json.dump({sku: [w_p, w_l] for sku, (w_p, w_l) in weights_by_sku.items()}, file_obj, indent=2)
+            with backtest_path.open("w", encoding="utf-8") as file_obj:
+                json.dump(backtest_results, file_obj, indent=2)
             mlflow.log_artifact(str(prophet_path))
             mlflow.log_artifact(str(weights_path))
+            mlflow.log_artifact(str(backtest_path))
+
+        try:
+            processed_dir = Path("data") / "processed"
+            processed_dir.mkdir(parents=True, exist_ok=True)
+            summary_path = processed_dir / "training_summary.parquet"
+            trained_at = pd.Timestamp.utcnow().isoformat()
+            summary_df = pd.DataFrame(
+                [
+                    {
+                        "sku_id": sku_id,
+                        "trained_at": trained_at,
+                        "val_rmse": val_rmse,
+                        "n_prophet_models": len(prophet_models),
+                    }
+                    for sku_id in prophet_models
+                ]
+            )
+            summary_df.to_parquet(summary_path, index=False)
+            mlflow.log_artifact(str(summary_path))
+        except Exception:
+            pass
 
         mlflow.log_param("status", "trained")
-        print(f"Training complete. Val RMSE: {val_rmse:.4f}")
+        print(f"Training complete. Val RMSE: {val_rmse:.4f}. Val WRMSSE: {val_wrmsse:.4f}")
         print(f"MLflow run ID: {run.info.run_id}")
 
 

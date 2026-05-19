@@ -115,3 +115,100 @@ def blend(
     """Blend Prophet and LightGBM forecasts."""
     blended = (w_p * np.asarray(prophet_preds, dtype=float)) + (w_l * np.asarray(lgbm_preds, dtype=float))
     return np.clip(blended, 0.0, None)
+
+
+def wrmsse(actual: pd.Series, predicted: pd.Series, scale: float, weight: float = 1.0) -> float:
+    """Calculate weighted root mean squared scaled error."""
+    actual_arr = actual.to_numpy(dtype=float)
+    predicted_arr = predicted.to_numpy(dtype=float)
+    valid = ~(np.isnan(actual_arr) | np.isnan(predicted_arr))
+    if not valid.any():
+        return float("nan")
+
+    mse = float(np.mean((actual_arr[valid] - predicted_arr[valid]) ** 2))
+    if scale <= 0 or np.isnan(scale):
+        return 0.0 if mse == 0 else float("inf")
+    return float(np.sqrt(mse / scale) * weight)
+
+
+def rolling_backtest(
+    df: pd.DataFrame,
+    sku_id: str,
+    booster,
+    prophet_models: dict,
+    ensemble_weights: dict,
+    n_windows: int = 3,
+    window_days: int = 28,
+) -> dict:
+    """Run rolling validation windows for one SKU."""
+    del booster, prophet_models
+
+    ordered = df.copy()
+    ordered["date"] = pd.to_datetime(ordered["date"])
+    ordered = ordered.sort_values(["sku_id", "date"]).reset_index(drop=True)
+    sku_df = ordered.loc[ordered["sku_id"] == sku_id].sort_values("date")
+    if sku_df.empty:
+        return {}
+
+    max_date = sku_df["date"].max()
+    results: dict[str, dict[str, float] | float] = {}
+    prophet_scores: list[float] = []
+    lgbm_scores: list[float] = []
+    ensemble_scores: list[float] = []
+
+    lookback_days = max(90, n_windows * window_days)
+    step_days = 0.0 if n_windows == 1 else (lookback_days - window_days) / (n_windows - 1)
+
+    for window_idx in range(n_windows):
+        offset_days = round(lookback_days - window_days - (window_idx * step_days))
+        window_start = max_date - pd.Timedelta(days=offset_days)
+        window_end = window_start + pd.Timedelta(days=window_days - 1)
+
+        train_window = ordered.loc[ordered["date"] < window_start]
+        sku_holdout = sku_df.loc[(sku_df["date"] >= window_start) & (sku_df["date"] <= window_end)].sort_values("date")
+        if train_window.empty or sku_holdout.empty:
+            window_result = {
+                "prophet_rmse": float("nan"),
+                "lgbm_rmse": float("nan"),
+                "ensemble_rmse": float("nan"),
+            }
+            results[f"window_{window_idx}"] = window_result
+            continue
+
+        window_booster = train_lightgbm(train_window)
+        lgbm_preds = forecast_lightgbm(window_booster, sku_holdout)
+        prophet_model = train_prophet(train_window, sku_id)
+        if prophet_model is None:
+            prophet_preds = np.zeros(len(sku_holdout), dtype=float)
+            prophet_rmse = float("nan")
+            w_prophet, w_lightgbm = 0.0, 1.0
+        else:
+            prophet_forecast = forecast_prophet(prophet_model, horizon=len(sku_holdout))
+            prophet_preds = prophet_forecast["yhat"].to_numpy(dtype=float)
+            prophet_rmse = float(np.sqrt(np.mean((sku_holdout["sales"].to_numpy(dtype=float) - prophet_preds) ** 2)))
+            w_prophet, w_lightgbm = ensemble_weights.get(sku_id, (0.5, 0.5))
+
+        ensemble_preds = blend(prophet_preds, lgbm_preds, float(w_prophet), float(w_lightgbm))
+        actuals = sku_holdout["sales"].to_numpy(dtype=float)
+        lgbm_rmse = float(np.sqrt(np.mean((actuals - lgbm_preds) ** 2)))
+        ensemble_rmse = float(np.sqrt(np.mean((actuals - ensemble_preds) ** 2)))
+
+        window_result = {
+            "prophet_rmse": prophet_rmse,
+            "lgbm_rmse": lgbm_rmse,
+            "ensemble_rmse": ensemble_rmse,
+        }
+        results[f"window_{window_idx}"] = window_result
+        prophet_scores.append(prophet_rmse)
+        lgbm_scores.append(lgbm_rmse)
+        ensemble_scores.append(ensemble_rmse)
+
+    def mean_score(scores: list[float]) -> float:
+        score_array = np.asarray(scores, dtype=float)
+        score_array = score_array[~np.isnan(score_array)]
+        return float(np.mean(score_array)) if len(score_array) else float("nan")
+
+    results["avg_prophet_rmse"] = mean_score(prophet_scores)
+    results["avg_lgbm_rmse"] = mean_score(lgbm_scores)
+    results["avg_ensemble_rmse"] = mean_score(ensemble_scores)
+    return results
