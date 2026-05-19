@@ -167,6 +167,13 @@ def preprocess(
     merged["sku_id"] = merged["item_id"].astype(str) + "_" + merged["store_id"].astype(str)
     merged["d"] = merged["d"].str.removeprefix("d_").astype(int)
     merged = merged.sort_values(["sku_id", "date"]).reset_index(drop=True)
+    merged["sell_price"] = merged.groupby("sku_id", sort=False)["sell_price"].ffill()
+    merged["sell_price"] = merged["sell_price"].fillna(
+        merged.groupby("sku_id", sort=False)["sell_price"].transform("median")
+    )
+    global_median_price = merged["sell_price"].median()
+    merged["sell_price"] = merged["sell_price"].fillna(1.0 if pd.isna(global_median_price) else global_median_price)
+    merged["sell_price"] = merged["sell_price"].astype(float)
 
     columns = [
         "item_id",

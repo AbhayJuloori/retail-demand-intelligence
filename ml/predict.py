@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 _cache: dict[str, tuple[object, dict[str, Any], dict[str, tuple[float, float]]]] = {}
 _shap_cache: dict[str, list[str]] = {}
 _CALENDAR_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "calendar.csv"
+_SELL_PRICES_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "sell_prices.csv"
+_sell_prices_cache: pd.DataFrame | None = None
+_sell_prices_loaded = False
 
 
 def _latest_successful_run_id(experiment_name: str) -> str:
@@ -95,6 +98,47 @@ def _sku_state(sku_id: str) -> str | None:
     return None
 
 
+def _load_sell_prices() -> pd.DataFrame | None:
+    global _sell_prices_cache, _sell_prices_loaded
+    if _sell_prices_loaded:
+        return _sell_prices_cache
+
+    _sell_prices_loaded = True
+    if not _SELL_PRICES_PATH.exists():
+        return None
+
+    try:
+        _sell_prices_cache = pd.read_csv(
+            _SELL_PRICES_PATH,
+            usecols=["store_id", "item_id", "wm_yr_wk", "sell_price"],
+        )
+    except Exception:
+        logger.exception("Failed to load sell prices from %s", _SELL_PRICES_PATH)
+        _sell_prices_cache = None
+    return _sell_prices_cache
+
+
+def _last_known_sell_price(sku_id: str) -> float:
+    sell_prices = _load_sell_prices()
+    if sell_prices is None:
+        return 1.0
+
+    sku_parts = sku_id.split("_")
+    if len(sku_parts) < 4:
+        return 1.0
+
+    item_id = "_".join(sku_parts[:3])
+    store_id = "_".join(sku_parts[3:])
+    sku_prices = sell_prices.loc[
+        (sell_prices["item_id"] == item_id) & (sell_prices["store_id"] == store_id)
+    ]
+    if sku_prices.empty:
+        return 1.0
+
+    latest_week_idx = sku_prices["wm_yr_wk"].idxmax()
+    return float(sku_prices.loc[latest_week_idx, "sell_price"])
+
+
 def _future_calendar_flags(sku_id: str, forecast_df: pd.DataFrame) -> pd.DataFrame:
     flags = pd.DataFrame(
         {
@@ -119,8 +163,9 @@ def _future_calendar_flags(sku_id: str, forecast_df: pd.DataFrame) -> pd.DataFra
     return flags
 
 
-def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame) -> pd.DataFrame:
+def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str | None = None) -> pd.DataFrame:
     history = [float(value) for value in model.history["y"].to_numpy()]
+    sell_price = _last_known_sell_price(sku_id) if sku_id is not None else 1.0
     rows: list[dict[str, float | int]] = []
 
     for _, forecast_row in forecast_df.iterrows():
@@ -142,7 +187,7 @@ def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame) -> pd.DataF
             "week_of_year": int(date.isocalendar().week),
             "snap_flag": 0,
             "has_event": 0,
-            "sell_price": 1.0,
+            "sell_price": sell_price,
         }
         rows.append(row)
         history.append(max(0.0, float(forecast_row["yhat"])))
@@ -164,7 +209,7 @@ def predict(
 
     prophet_model = prophet_models[sku_id]
     forecast_df = forecast_prophet(prophet_model, horizon)
-    future_features_df = _future_lightgbm_features(prophet_model, forecast_df)
+    future_features_df = _future_lightgbm_features(prophet_model, forecast_df, sku_id)
     calendar_flags = _future_calendar_flags(sku_id, forecast_df)
     future_features_df["snap_flag"] = calendar_flags["snap_flag"]
     future_features_df["has_event"] = calendar_flags["has_event"]

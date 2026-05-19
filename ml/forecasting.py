@@ -68,13 +68,18 @@ def train_lightgbm(train_df: pd.DataFrame) -> lgb.Booster:
     params = {
         "objective": "regression",
         "metric": "rmse",
-        "num_leaves": 31,
-        "n_estimators": 200,
-        "learning_rate": 0.05,
+        "num_leaves": 63,
+        "n_estimators": 500,
+        "learning_rate": 0.03,
+        "min_child_samples": 10,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_alpha": 0.1,
+        "reg_lambda": 0.1,
         "random_state": 42,
         "verbosity": -1,
     }
-    return lgb.train(params, dataset, num_boost_round=200)
+    return lgb.train(params, dataset, num_boost_round=500)
 
 
 def forecast_lightgbm(booster: lgb.Booster, val_df: pd.DataFrame) -> np.ndarray:
