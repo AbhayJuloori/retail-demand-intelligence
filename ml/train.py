@@ -45,14 +45,19 @@ def main(
         sales_df, prices_df, calendar_df = load_m5_data()
 
     tidy_df = preprocess(sales_df, prices_df, calendar_df)
-    feature_df = engineer_features(tidy_df)
-    train_df, val_df = train_val_split(feature_df, val_days=28)
 
-    skus = sorted(feature_df["sku_id"].unique().tolist())
+    # Sample before feature engineering so we don't process all 57M rows
+    all_skus = sorted(tidy_df["sku_id"].unique().tolist())
     if sku_sample is not None:
         rng = np.random.default_rng(42)
-        sample_size = min(sku_sample, len(skus))
-        skus = sorted(rng.choice(skus, size=sample_size, replace=False).tolist())
+        sample_size = min(sku_sample, len(all_skus))
+        skus = sorted(rng.choice(all_skus, size=sample_size, replace=False).tolist())
+        tidy_df = tidy_df[tidy_df["sku_id"].isin(skus)].copy()
+    else:
+        skus = all_skus
+
+    feature_df = engineer_features(tidy_df)
+    train_df, val_df = train_val_split(feature_df, val_days=28)
 
     with mlflow.start_run() as run:
         mlflow.log_params(
