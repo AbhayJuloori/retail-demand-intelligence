@@ -183,8 +183,11 @@ def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str
             "lag_14": lag_value(14),
             "lag_28": lag_value(28),
             "lag_56": 0.0,
+            "lag_364": 0.0,
             "rolling_mean_7": float(np.mean(current_history[-7:])),
             "rolling_mean_28": float(np.mean(current_history[-28:])),
+            "rolling_std_7": 0.0,
+            "rolling_std_28": 0.0,
             "store_rolling_mean_7": 0.0,
             "store_rolling_mean_28": 0.0,
             "day_of_week": int(date.dayofweek),
@@ -192,6 +195,10 @@ def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str
             "week_of_year": int(date.isocalendar().week),
             "snap_flag": 0,
             "has_event": 0,
+            "event_cultural": 0,
+            "event_national": 0,
+            "event_religious": 0,
+            "event_sporting": 0,
             "sell_price": sell_price,
         }
         rows.append(row)

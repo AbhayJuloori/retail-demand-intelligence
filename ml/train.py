@@ -71,7 +71,7 @@ def main(
         booster = train_lightgbm(train_df)
         mlflow.log_params(
             {
-                "lgbm_objective": "regression",
+                "lgbm_objective": "tweedie",
                 "lgbm_num_leaves": 31,
                 "lgbm_n_estimators": 200,
                 "lgbm_learning_rate": 0.05,

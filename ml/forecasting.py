@@ -26,8 +26,11 @@ FEATURE_COLUMNS = [
     "lag_14",
     "lag_28",
     "lag_56",
+    "lag_364",
     "rolling_mean_7",
     "rolling_mean_28",
+    "rolling_std_7",
+    "rolling_std_28",
     "store_rolling_mean_7",
     "store_rolling_mean_28",
     "day_of_week",
@@ -35,6 +38,10 @@ FEATURE_COLUMNS = [
     "week_of_year",
     "snap_flag",
     "has_event",
+    "event_cultural",
+    "event_national",
+    "event_religious",
+    "event_sporting",
     "sell_price",
 ]
 
@@ -71,7 +78,8 @@ def train_lightgbm(train_df: pd.DataFrame) -> lgb.Booster:
     model_df = train_df.dropna(subset=FEATURE_COLUMNS + ["sales"]).copy()
     dataset = lgb.Dataset(model_df[FEATURE_COLUMNS], label=model_df["sales"])
     params = {
-        "objective": "regression",
+        "objective": "tweedie",
+        "tweedie_variance_power": 1.5,
         "metric": "rmse",
         "num_leaves": 63,
         "n_estimators": 500,

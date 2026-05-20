@@ -154,7 +154,7 @@ def preprocess(
         value_name="sales",
     )
 
-    calendar_cols = ["d", "date", "wm_yr_wk", "event_name_1", "snap_CA", "snap_TX", "snap_WI"]
+    calendar_cols = ["d", "date", "wm_yr_wk", "event_name_1", "event_type_1", "snap_CA", "snap_TX", "snap_WI"]
     calendar = calendar_df[calendar_cols].copy()
     calendar["date"] = pd.to_datetime(calendar["date"])
 
@@ -183,6 +183,7 @@ def preprocess(
         "sales",
         "sell_price",
         "event_name_1",
+        "event_type_1",
         "snap_CA",
         "snap_TX",
         "snap_WI",
@@ -198,11 +199,15 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     featured = featured.sort_values(["sku_id", "date"]).reset_index(drop=True)
     grouped = featured.groupby("sku_id", sort=False)["sales"]
 
-    for lag in (1, 3, 7, 14, 28, 56):
+    for lag in (1, 3, 7, 14, 28, 56, 364):
         featured[f"lag_{lag}"] = grouped.shift(lag)
+    featured["lag_364"] = featured["lag_364"].fillna(0.0)
 
     featured["rolling_mean_7"] = grouped.transform(lambda series: series.shift(1).rolling(7).mean())
     featured["rolling_mean_28"] = grouped.transform(lambda series: series.shift(1).rolling(28).mean())
+    featured["rolling_std_7"] = grouped.transform(lambda series: series.shift(1).rolling(7, min_periods=2).std())
+    featured["rolling_std_28"] = grouped.transform(lambda series: series.shift(1).rolling(28, min_periods=2).std())
+    featured[["rolling_std_7", "rolling_std_28"]] = featured[["rolling_std_7", "rolling_std_28"]].fillna(0.0)
 
     featured["store_id"] = featured["sku_id"].str.split("_").str[-2:].str.join("_")
     store_daily = (
@@ -234,6 +239,11 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     featured["week_of_year"] = featured["date"].dt.isocalendar().week.astype(int)
     featured["snap_flag"] = featured[["snap_CA", "snap_TX", "snap_WI"]].max(axis=1).astype(int)
     featured["has_event"] = featured["event_name_1"].notna().astype(int)
+    event_type = featured["event_type_1"] if "event_type_1" in featured.columns else pd.Series("", index=featured.index)
+    featured["event_cultural"] = (event_type == "Cultural").astype(int)
+    featured["event_national"] = (event_type == "National").astype(int)
+    featured["event_religious"] = (event_type == "Religious").astype(int)
+    featured["event_sporting"] = (event_type == "Sporting").astype(int)
 
     required_features = ["lag_7", "lag_14", "lag_28", "lag_56", "rolling_mean_7", "rolling_mean_28"]
     return featured.dropna(subset=required_features).reset_index(drop=True)
