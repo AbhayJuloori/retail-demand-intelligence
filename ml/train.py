@@ -139,6 +139,25 @@ def main(
             val_rmse = float("nan")
             val_wrmsse = float("nan")
 
+        # Log core metrics + artifacts first so a kill during backtest doesn't lose the run
+        mlflow.log_metric("val_rmse", val_rmse)
+        mlflow.log_metric("val_wrmsse", val_wrmsse)
+        mlflow.lightgbm.log_model(booster, "lightgbm_model")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            prophet_path = tmp_path / "prophet_models.pkl"
+            weights_path = tmp_path / "ensemble_weights.json"
+            with prophet_path.open("wb") as file_obj:
+                pickle.dump(prophet_models, file_obj)
+            with weights_path.open("w", encoding="utf-8") as file_obj:
+                json.dump({sku: [w_p, w_l] for sku, (w_p, w_l) in weights_by_sku.items()}, file_obj, indent=2)
+            mlflow.log_artifact(str(prophet_path))
+            mlflow.log_artifact(str(weights_path))
+
+        print(f"Core artifacts logged. Val RMSE: {val_rmse:.4f}. Val WRMSSE: {val_wrmsse:.4f}")
+
+        # Backtest runs after artifacts are safe
         backtest_results: dict[str, dict] = {}
         for backtest_sku in skus[:5]:
             result = rolling_backtest(feature_df, backtest_sku, booster, prophet_models, weights_by_sku)
@@ -150,25 +169,13 @@ def main(
             if not np.isnan(float(result["avg_ensemble_rmse"]))
         ]
         backtest_avg_ensemble_rmse = float(np.mean(backtest_scores)) if backtest_scores else float("nan")
-
-        mlflow.log_metric("val_rmse", val_rmse)
-        mlflow.log_metric("val_wrmsse", val_wrmsse)
         mlflow.log_metric("backtest_avg_ensemble_rmse", backtest_avg_ensemble_rmse)
-        mlflow.lightgbm.log_model(booster, "lightgbm_model")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
-            prophet_path = tmp_path / "prophet_models.pkl"
-            weights_path = tmp_path / "ensemble_weights.json"
             backtest_path = tmp_path / "backtest_results.json"
-            with prophet_path.open("wb") as file_obj:
-                pickle.dump(prophet_models, file_obj)
-            with weights_path.open("w", encoding="utf-8") as file_obj:
-                json.dump({sku: [w_p, w_l] for sku, (w_p, w_l) in weights_by_sku.items()}, file_obj, indent=2)
             with backtest_path.open("w", encoding="utf-8") as file_obj:
                 json.dump(backtest_results, file_obj, indent=2)
-            mlflow.log_artifact(str(prophet_path))
-            mlflow.log_artifact(str(weights_path))
             mlflow.log_artifact(str(backtest_path))
 
         try:

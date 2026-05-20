@@ -198,20 +198,45 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     featured = featured.sort_values(["sku_id", "date"]).reset_index(drop=True)
     grouped = featured.groupby("sku_id", sort=False)["sales"]
 
-    for lag in (7, 14, 28):
+    for lag in (1, 3, 7, 14, 28, 56):
         featured[f"lag_{lag}"] = grouped.shift(lag)
 
     featured["rolling_mean_7"] = grouped.transform(lambda series: series.shift(1).rolling(7).mean())
     featured["rolling_mean_28"] = grouped.transform(lambda series: series.shift(1).rolling(28).mean())
+
+    featured["store_id"] = featured["sku_id"].str.split("_").str[-2:].str.join("_")
+    store_daily = (
+        featured.groupby(["store_id", "date"])["sales"]
+        .mean()
+        .reset_index()
+        .rename(columns={"sales": "store_daily_mean"})
+        .sort_values(["store_id", "date"])
+    )
+    store_grouped = store_daily.groupby("store_id", sort=False)["store_daily_mean"]
+    store_daily["store_rolling_mean_7"] = store_grouped.transform(
+        lambda series: series.rolling(7, min_periods=1).mean()
+    )
+    store_daily["store_rolling_mean_28"] = store_grouped.transform(
+        lambda series: series.rolling(28, min_periods=1).mean()
+    )
+    featured = featured.merge(
+        store_daily[["store_id", "date", "store_rolling_mean_7", "store_rolling_mean_28"]],
+        on=["store_id", "date"],
+        how="left",
+    )
+    featured[["store_rolling_mean_7", "store_rolling_mean_28"]] = featured[
+        ["store_rolling_mean_7", "store_rolling_mean_28"]
+    ].fillna(0.0)
+    featured = featured.drop(columns=["store_id"])
+
     featured["day_of_week"] = featured["date"].dt.dayofweek
     featured["month"] = featured["date"].dt.month
     featured["week_of_year"] = featured["date"].dt.isocalendar().week.astype(int)
     featured["snap_flag"] = featured[["snap_CA", "snap_TX", "snap_WI"]].max(axis=1).astype(int)
     featured["has_event"] = featured["event_name_1"].notna().astype(int)
 
-    return featured.dropna(subset=["lag_7", "lag_14", "lag_28", "rolling_mean_7", "rolling_mean_28"]).reset_index(
-        drop=True
-    )
+    required_features = ["lag_7", "lag_14", "lag_28", "lag_56", "rolling_mean_7", "rolling_mean_28"]
+    return featured.dropna(subset=required_features).reset_index(drop=True)
 
 
 def train_val_split(

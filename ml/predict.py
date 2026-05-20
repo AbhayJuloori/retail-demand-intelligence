@@ -177,11 +177,16 @@ def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str
             return current_history[-lag] if len(current_history) >= lag else fallback
 
         row = {
+            "lag_1": 0.0,
+            "lag_3": 0.0,
             "lag_7": lag_value(7),
             "lag_14": lag_value(14),
             "lag_28": lag_value(28),
+            "lag_56": 0.0,
             "rolling_mean_7": float(np.mean(current_history[-7:])),
             "rolling_mean_28": float(np.mean(current_history[-28:])),
+            "store_rolling_mean_7": 0.0,
+            "store_rolling_mean_28": 0.0,
             "day_of_week": int(date.dayofweek),
             "month": int(date.month),
             "week_of_year": int(date.isocalendar().week),

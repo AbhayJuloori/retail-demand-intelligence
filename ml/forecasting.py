@@ -20,11 +20,16 @@ else:
 logger = logging.getLogger(__name__)
 
 FEATURE_COLUMNS = [
+    "lag_1",
+    "lag_3",
     "lag_7",
     "lag_14",
     "lag_28",
+    "lag_56",
     "rolling_mean_7",
     "rolling_mean_28",
+    "store_rolling_mean_7",
+    "store_rolling_mean_28",
     "day_of_week",
     "month",
     "week_of_year",
