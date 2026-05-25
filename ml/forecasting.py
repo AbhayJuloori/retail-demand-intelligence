@@ -53,8 +53,6 @@ FEATURE_COLUMNS = [
 ]
 
 LIGHTGBM_NUM_BOOST_ROUND = 500
-LIGHTGBM_EARLY_STOPPING_ROUNDS = 100
-LIGHTGBM_VALIDATION_DAYS = 28
 
 
 def train_prophet(train_df: pd.DataFrame, sku_id: str) -> Any | None:
