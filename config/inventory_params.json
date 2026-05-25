@@ -1,0 +1,30 @@
+{
+  "FOODS": {
+    "lead_time_days": 7,
+    "service_level_z": 1.645,
+    "order_cost": 50,
+    "holding_cost_pct": 0.25,
+    "unit_price": 3.50
+  },
+  "HOUSEHOLD": {
+    "lead_time_days": 14,
+    "service_level_z": 1.645,
+    "order_cost": 75,
+    "holding_cost_pct": 0.20,
+    "unit_price": 8.00
+  },
+  "HOBBIES": {
+    "lead_time_days": 21,
+    "service_level_z": 1.28,
+    "order_cost": 100,
+    "holding_cost_pct": 0.20,
+    "unit_price": 15.00
+  },
+  "default": {
+    "lead_time_days": 7,
+    "service_level_z": 1.645,
+    "order_cost": 50,
+    "holding_cost_pct": 0.25,
+    "unit_price": 5.00
+  }
+}

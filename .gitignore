@@ -15,13 +15,22 @@ dist/
 .mypy_cache/
 .ruff_cache/
 
+# OS
+.DS_Store
+
 # Environment
 .env
 
 # Data and experiment artifacts (raw/processed data only, not source files)
 data/raw/
-data/processed/
+data/processed/*
+!data/processed/.gitkeep
+mlflow.db
 mlruns/
+*.pkl
+
+# Local scratch
+/tmp/
 
 # Frontend
 node_modules/

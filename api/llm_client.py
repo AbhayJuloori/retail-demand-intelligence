@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Optional
 
 
@@ -70,12 +71,10 @@ class LLMClient:
         return system + "\n\n" + user
 
     def _call_groq(self, prompt: str, key: str) -> str:
-        import httpx
-
         parts = prompt.split("\n\n", 1)
         system_msg = parts[0]
         user_msg = parts[1] if len(parts) > 1 else prompt
-        resp = httpx.post(
+        resp = self._post_with_retries(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             json={
@@ -84,18 +83,14 @@ class LLMClient:
                 "max_tokens": 150,
                 "temperature": 0.3,
             },
-            timeout=15.0,
         )
-        resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
 
     def _call_openai(self, prompt: str, key: str) -> str:
-        import httpx
-
         parts = prompt.split("\n\n", 1)
         system_msg = parts[0]
         user_msg = parts[1] if len(parts) > 1 else prompt
-        resp = httpx.post(
+        resp = self._post_with_retries(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             json={
@@ -104,18 +99,14 @@ class LLMClient:
                 "max_tokens": 150,
                 "temperature": 0.3,
             },
-            timeout=15.0,
         )
-        resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
 
     def _call_anthropic(self, prompt: str, key: str) -> str:
-        import httpx
-
         parts = prompt.split("\n\n", 1)
         system_msg = parts[0]
         user_msg = parts[1] if len(parts) > 1 else prompt
-        resp = httpx.post(
+        resp = self._post_with_retries(
             "https://api.anthropic.com/v1/messages",
             headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
             json={
@@ -124,21 +115,28 @@ class LLMClient:
                 "messages": [{"role": "user", "content": user_msg}],
                 "max_tokens": 150,
             },
-            timeout=15.0,
         )
-        resp.raise_for_status()
         return resp.json()["content"][0]["text"].strip()
 
     def _call_gemini(self, prompt: str, key: str) -> str:
-        import httpx
-
-        resp = httpx.post(
+        resp = self._post_with_retries(
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}",
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"maxOutputTokens": 150, "temperature": 0.3},
             },
-            timeout=15.0,
         )
-        resp.raise_for_status()
         return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+    def _post_with_retries(self, url: str, **kwargs):
+        import httpx
+
+        retry_statuses = {429, 500}
+        for attempt in range(3):
+            resp = httpx.post(url, timeout=10.0, **kwargs)
+            if resp.status_code not in retry_statuses or attempt == 2:
+                resp.raise_for_status()
+                return resp
+            time.sleep(0.5 * (attempt + 1))
+
+        raise RuntimeError("HTTP retry loop exhausted")
