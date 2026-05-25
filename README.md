@@ -28,7 +28,7 @@ FastAPI ──► Next.js 15 Dashboard
 
 - **Features:** lag-1/3/7/14/28/56/364d, rolling mean/std 7/28d, store-level aggregates, SNAP flags (state-matched), calendar events (cultural/national/religious/sporting), hierarchy categoricals (dept, category, state), price momentum
 - **Models:** Prophet per SKU (weekly + yearly seasonality, US holidays) + global LightGBM (Tweedie loss) ensemble
-- **Evaluation:** WRMSSE (M5 standard) — current val score **0.6381** on 2000-SKU sample
+- **Evaluation:** WRMSSE (M5 standard) — current val score **0.6356** on 2000-SKU sample
 - **MLflow:** every run tracked with params, metrics, SHAP importance, backtest artifacts
 
 ## Stack
