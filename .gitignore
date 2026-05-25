@@ -35,3 +35,5 @@ mlruns/
 # Frontend
 node_modules/
 .next/
+
+# AI tool files (not for public repo)
