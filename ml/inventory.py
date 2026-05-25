@@ -2,12 +2,33 @@
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import date, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import pandas as pd
+
+_INV_CONFIG: dict | None = None
+_CONFIG_PATH = Path(__file__).parent.parent / "config" / "inventory_params.json"
+
+
+def _load_config() -> dict:
+    global _INV_CONFIG
+    if _INV_CONFIG is None:
+        try:
+            _INV_CONFIG = json.loads(_CONFIG_PATH.read_text())
+        except Exception:
+            _INV_CONFIG = {}
+    return _INV_CONFIG
+
+
+def _params_for_sku(sku_id: str) -> dict:
+    config = _load_config()
+    category = sku_id.split("_")[0] if "_" in sku_id else ""
+    return config.get(category) or config.get("default") or {}
 
 
 def reorder_point(avg_daily_demand: float, lead_time_days: int, safety_stock_units: float) -> float:
@@ -62,6 +83,12 @@ def compute_inventory_state(
     holding_cost_rate: float = 0.25,
     avg_unit_price: float = 5.0,
 ) -> dict[str, float | int | str]:
+    p = _params_for_sku(sku_id)
+    lead_time_days = p.get("lead_time_days", lead_time_days)
+    z_score = p.get("service_level_z", z_score)
+    order_cost = p.get("order_cost", order_cost)
+    holding_cost_rate = p.get("holding_cost_pct", holding_cost_rate)
+    avg_unit_price = p.get("unit_price", avg_unit_price)
     """Compute inventory state and replenishment recommendation for a SKU."""
     avg_daily_demand = float(forecast_df["yhat"].mean())
     uncertainty_width = forecast_df["yhat_upper"] - forecast_df["yhat_lower"]

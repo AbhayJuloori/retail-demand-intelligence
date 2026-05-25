@@ -99,6 +99,8 @@ def metrics(run_id: Optional[str] = None):
 def forecast(sku_id: str, horizon: int = 28, current_stock: Optional[float] = None, run_id: Optional[str] = None):
     if not ML_AVAILABLE:
         raise HTTPException(503, detail=f"ML layer not available: {_ML_ERROR}")
+    if horizon < 1 or horizon > 90:
+        raise HTTPException(400, detail="horizon must be 1-90")
     try:
         result = ml_predict(sku_id=sku_id, horizon=horizon, run_id=run_id, current_stock=current_stock)
     except Exception as e:
@@ -109,9 +111,11 @@ def forecast(sku_id: str, horizon: int = 28, current_stock: Optional[float] = No
 
 
 @app.get("/inventory")
-def inventory_summary(run_id: Optional[str] = None, limit: int = 100):
+def inventory_summary(run_id: Optional[str] = None, limit: int = 100, current_stock: Optional[float] = 100.0):
     if not ML_AVAILABLE:
         raise HTTPException(503, detail=f"ML layer not available: {_ML_ERROR}")
+    if limit < 1 or limit > 500:
+        raise HTTPException(400, detail="limit must be 1-500")
     try:
         artifacts = load_artifacts(run_id=run_id)
         booster, prophet_models, ensemble_weights = artifacts
@@ -122,7 +126,7 @@ def inventory_summary(run_id: Optional[str] = None, limit: int = 100):
     results = []
     for sku_id in skus:
         try:
-            fc = ml_predict(sku_id=sku_id, horizon=28, run_id=run_id, current_stock=100.0)
+            fc = ml_predict(sku_id=sku_id, horizon=28, run_id=run_id, current_stock=current_stock)
             inv = fc.get("inventory_state", {})
             results.append({"sku_id": sku_id, **inv})
         except Exception:
