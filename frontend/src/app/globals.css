@@ -2,27 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --cream: #F5F0EB;
-  --navy: #1B2340;
-  --sage: #7B9E87;
-  --lavender: #9B8EC4;
-  --dusty-pink: #C4848A;
-  --amber: #D4A017;
-}
-
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  background-color: var(--cream);
-  color: var(--navy);
-  font-family: 'Inter', sans-serif;
+  min-height: 100%;
+  background: #ffffff;
+  color: #0f172a;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }

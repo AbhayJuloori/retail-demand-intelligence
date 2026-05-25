@@ -1,24 +1,24 @@
-type KPICardProps = {
-  label: string;
+interface KPICardProps {
+  title: string;
   value: string | number;
-  delta?: string;
-  highlight?: boolean;
+  note?: string;
+  tone?: "blue" | "green" | "amber" | "red" | "slate";
+}
+
+const toneClasses = {
+  blue: "text-[#2563EB]",
+  green: "text-[#16A34A]",
+  amber: "text-[#D97706]",
+  red: "text-[#DC2626]",
+  slate: "text-[#0F172A]",
 };
 
-export default function KPICard({ label, value, delta, highlight = false }: KPICardProps) {
-  const isPositive = delta?.trim().startsWith("+");
-
+export default function KPICard({ title, value, note, tone = "slate" }: KPICardProps) {
   return (
-    <section className="rounded-2xl bg-navy p-6 text-cream shadow-sm">
-      <div className={`font-black ${highlight ? "text-6xl text-amber" : "text-5xl"}`}>
-        {value}
-      </div>
-      <div className="mt-3 text-sm font-bold uppercase tracking-normal opacity-70">{label}</div>
-      {delta ? (
-        <div className={`mt-4 text-sm font-bold ${isPositive ? "text-sage" : "text-cream/80"}`}>
-          {delta}
-        </div>
-      ) : null}
+    <section className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
+      <p className="text-sm font-medium text-[#64748B]">{title}</p>
+      <p className={`mt-3 text-3xl font-bold ${toneClasses[tone]}`}>{value}</p>
+      {note ? <p className="mt-2 text-sm text-[#64748B]">{note}</p> : null}
     </section>
   );
 }

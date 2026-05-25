@@ -1,105 +1,142 @@
 "use client";
 
-import { useState } from "react";
-import StatusBadge, { type StockStatus } from "../components/StatusBadge";
+import { useEffect, useState } from "react";
+import StatusBadge from "../components/StatusBadge";
+import { apiFetch } from "../lib/api";
+import type { InsightResponse, InventoryResponse, InventorySKU } from "../lib/types";
 
-type Insight = {
-  id: string;
-  status: StockStatus;
-  narrative: string;
-};
-
-const insights: Insight[] = [
-  {
-    id: "FOODS-3-090-CA-1",
-    status: "STOCKOUT IMMINENT",
-    narrative:
-      "Demand is running 28% above the seven-day baseline. Current inventory will cover two days unless the replenishment order is advanced.",
-  },
-  {
-    id: "HOUSE-1-224-TX-2",
-    status: "AT RISK",
-    narrative:
-      "Weekly seasonality is lifting forecast volume into the weekend. Reorder 180 units by May 24 to keep service level above target.",
-  },
-  {
-    id: "HOBBIES-2-048-WI-1",
-    status: "AT RISK",
-    narrative:
-      "The rolling mean has climbed for three consecutive runs. Safety stock is narrowing, with seven days remaining at expected demand.",
-  },
-  {
-    id: "FOODS-2-312-CA-3",
-    status: "AT RISK",
-    narrative:
-      "SNAP-week demand is projected to exceed the baseline curve. The recommended order covers the forecast band midpoint plus buffer.",
-  },
-  {
-    id: "HOUSE-2-110-WI-2",
-    status: "OK",
-    narrative:
-      "Inventory coverage remains healthy against the upper forecast interval. No urgent reorder is needed in this planning window.",
-  },
-];
+interface InsightCard {
+  sku: InventorySKU;
+  text: string;
+}
 
 export default function InsightsFeed() {
-  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
-  const [showByok, setShowByok] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [cards, setCards] = useState<InsightCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  function regenerate(id: string) {
-    setRegeneratingId(id);
-    window.setTimeout(() => setRegeneratingId(null), 1500);
+  useEffect(() => {
+    const storedKey = localStorage.getItem("llm_api_key") || "";
+    setApiKey(storedKey);
+    if (storedKey) {
+      load(storedKey);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  async function load(key = apiKey) {
+    setLoading(true);
+    setError(null);
+    try {
+      const inventory = await apiFetch<InventoryResponse>("/inventory?limit=100");
+      const topSkus = inventory.skus
+        .filter((sku) => sku.status !== "OK")
+        .sort((a, b) => a.days_until_stockout - b.days_until_stockout)
+        .slice(0, 10);
+      const insights = await Promise.all(
+        topSkus.map(async (sku) => {
+          const data = await apiFetch<InsightResponse>("/insights", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(key ? { "x-llm-key": key } : {}) },
+            body: JSON.stringify({
+              sku_id: sku.sku_id,
+              status: sku.status,
+              days_until_stockout: sku.days_until_stockout,
+              avg_daily_demand: sku.avg_daily_demand,
+              recommended_order_qty: sku.recommended_order_qty,
+              trigger_date: sku.trigger_date,
+              top_shap_features: [],
+            }),
+          });
+          return { sku, text: data.insight };
+        }),
+      );
+      setCards(insights);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load insights");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function saveApiKey(value: string) {
+    setApiKey(value);
+    localStorage.setItem("llm_api_key", value);
+  }
+
+  if (!apiKey) {
+    return (
+      <div className="max-w-xl rounded-xl border border-[#E2E8F0] bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-[#0F172A]">LLM API Key Required</h2>
+        <p className="mt-2 text-sm text-[#64748B]">Enter a key to generate the insight feed for at-risk SKUs.</p>
+        <input
+          className="mt-4 w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm outline-none focus:border-[#2563EB]"
+          placeholder="API key"
+          type="password"
+          onBlur={(event) => {
+            saveApiKey(event.target.value);
+            if (event.target.value) load(event.target.value);
+          }}
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-8">
-      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-black uppercase tracking-normal text-amber">Insights Feed</p>
-          <h1 className="mt-2 text-4xl font-black lg:text-6xl">Generated Inventory Narratives</h1>
+          <h2 className="text-lg font-semibold text-[#0F172A]">At-Risk Insight Feed</h2>
+          <p className="mt-1 text-sm text-[#64748B]">Generated narratives for the top 10 risk-ranked SKUs.</p>
         </div>
-        <button
-          onClick={() => setShowByok(true)}
-          className="rounded-full bg-amber px-5 py-3 text-sm font-black text-navy shadow-sm"
-        >
-          BYOK Modal
+        <button className="rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white" onClick={() => load()}>
+          Refresh All
         </button>
-      </section>
+      </div>
 
-      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {insights.map((insight) => (
-          <article key={insight.id} className="flex min-h-[260px] flex-col rounded-2xl bg-navy p-6 text-cream">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-xl font-black">{insight.id}</h2>
-              <StatusBadge status={insight.status} />
-            </div>
-            <p className="mt-5 line-clamp-3 text-base font-bold leading-7 text-cream/80">{insight.narrative}</p>
-            <button
-              onClick={() => regenerate(insight.id)}
-              className="mt-auto rounded-full bg-amber px-5 py-3 text-sm font-black text-navy transition hover:brightness-95"
-            >
-              {regeneratingId === insight.id ? "Regenerating..." : "Regenerate"}
-            </button>
-          </article>
-        ))}
-      </section>
-
-      {showByok ? (
-        <div className="fixed inset-0 z-20 grid place-items-center bg-navy/40 p-6">
-          <section className="w-full max-w-md rounded-2xl bg-cream p-6 text-navy shadow-xl">
-            <h2 className="text-2xl font-black">Bring Your Own Key</h2>
-            <p className="mt-3 text-sm font-bold text-navy/70">
-              Add a Groq API key to regenerate insights with your own quota.
-            </p>
-            <button
-              onClick={() => setShowByok(false)}
-              className="mt-6 rounded-full bg-navy px-5 py-3 text-sm font-black text-cream"
-            >
-              Close
-            </button>
-          </section>
+      {loading ? <Skeleton /> : null}
+      {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
+      {!loading && !error ? (
+        <div className="grid grid-cols-2 gap-4">
+          {cards.map(({ sku, text }) => (
+            <article key={sku.sku_id} className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="font-semibold text-[#0F172A]">{sku.sku_id}</h3>
+                <StatusBadge status={sku.status} />
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[#334155]">{text}</p>
+              <div className="mt-5 flex items-center justify-between border-t border-[#E2E8F0] pt-4 text-xs font-semibold text-[#64748B]">
+                <span>Trigger: {sku.trigger_date || "N/A"}</span>
+                <span>Order Qty: {Math.round(sku.recommended_order_qty).toLocaleString()}</span>
+              </div>
+            </article>
+          ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function Skeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div key={index} className="h-44 animate-pulse rounded-xl border border-[#E2E8F0] bg-[#F8FAFC]" />
+      ))}
+    </div>
+  );
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-6">
+      <h2 className="font-semibold text-[#991B1B]">Could not load insights</h2>
+      <p className="mt-2 text-sm text-[#991B1B]">{message}</p>
+      <button className="mt-4 rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white" onClick={onRetry}>
+        Retry
+      </button>
     </div>
   );
 }

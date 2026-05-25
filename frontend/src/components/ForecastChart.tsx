@@ -1,94 +1,74 @@
 "use client";
 
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
   Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Title,
   Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+} from "chart.js";
+import { Line } from "react-chartjs-2";
+import type { ForecastRow } from "../lib/types";
 
-export type ForecastPoint = {
-  date: string;
-  actual?: number;
-  yhat: number;
-  yhat_lower: number;
-  yhat_upper: number;
-};
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-type ForecastChartProps = {
-  data: ForecastPoint[];
-};
-
-type ChartPoint = ForecastPoint & {
-  uncertainty: number;
-};
-
-export default function ForecastChart({ data }: ForecastChartProps) {
-  const chartData: ChartPoint[] = data.map((point) => ({
-    ...point,
-    uncertainty: Math.max(point.yhat_upper - point.yhat_lower, 0),
-  }));
+export default function ForecastChart({ forecast }: { forecast: ForecastRow[] }) {
+  const labels = forecast.map((row) => row.date);
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: "Confidence Lower",
+        data: forecast.map((row) => row.yhat_lower),
+        borderColor: "rgba(37, 99, 235, 0)",
+        backgroundColor: "rgba(37, 99, 235, 0)",
+        pointRadius: 0,
+      },
+      {
+        label: "Confidence Band",
+        data: forecast.map((row) => row.yhat_upper),
+        borderColor: "rgba(37, 99, 235, 0)",
+        backgroundColor: "rgba(37, 99, 235, 0.14)",
+        fill: "-1",
+        pointRadius: 0,
+      },
+      {
+        label: "Blended Forecast",
+        data: forecast.map((row) => row.blended ?? row.yhat),
+        borderColor: "#2563EB",
+        backgroundColor: "#2563EB",
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.3,
+      },
+    ],
+  };
 
   return (
-    <div className="h-[300px] rounded-2xl bg-cream p-4">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 12, right: 16, bottom: 8, left: 0 }}>
-          <CartesianGrid stroke="#1B2340" strokeDasharray="3 3" opacity={0.12} />
-          <XAxis dataKey="date" tick={{ fill: "#1B2340", fontSize: 12 }} tickMargin={8} />
-          <YAxis tick={{ fill: "#1B2340", fontSize: 12 }} width={36} />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#F5F0EB",
-              border: "1px solid rgba(27, 35, 64, 0.18)",
-              borderRadius: "12px",
-              color: "#1B2340",
-            }}
-          />
-          <Legend />
-          <Area
-            dataKey="yhat_lower"
-            stackId="forecast-band"
-            stroke="none"
-            fill="#1B2340"
-            fillOpacity={0}
-            legendType="none"
-          />
-          <Area
-            name="Uncertainty"
-            dataKey="uncertainty"
-            stackId="forecast-band"
-            stroke="none"
-            fill="#1B2340"
-            fillOpacity={0.2}
-          />
-          <Line
-            name="Predicted"
-            type="monotone"
-            dataKey="yhat"
-            stroke="#1B2340"
-            strokeWidth={3}
-            dot={false}
-          />
-          <Line
-            name="Actual"
-            type="monotone"
-            dataKey="actual"
-            stroke="#D4A017"
-            strokeWidth={3}
-            strokeDasharray="6 6"
-            dot={false}
-            connectNulls
-          />
-        </LineChart>
-      </ResponsiveContainer>
+    <div className="h-[340px] rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
+      <Line
+        data={data}
+        options={{
+          maintainAspectRatio: false,
+          interaction: { intersect: false, mode: "index" },
+          plugins: {
+            legend: {
+              labels: {
+                color: "#64748B",
+                filter: (item) => item.text !== "Confidence Lower",
+              },
+            },
+          },
+          scales: {
+            x: { ticks: { color: "#64748B", maxRotation: 0 }, grid: { color: "#F1F5F9" } },
+            y: { ticks: { color: "#64748B" }, grid: { color: "#E2E8F0" } },
+          },
+        }}
+      />
     </div>
   );
 }
-
-export { AreaChart };

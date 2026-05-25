@@ -1,31 +1,31 @@
-import type { ReactElement } from "react";
+"use client";
+
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import InsightsFeed from "../views/InsightsFeed";
-import ModelPerformance from "../views/ModelPerformance";
+import InventoryTable from "../views/InventoryTable";
+import ModelMetrics from "../views/ModelMetrics";
 import Overview from "../views/Overview";
+import Simulation from "../views/Simulation";
 import SKUExplorer from "../views/SKUExplorer";
 
-type ViewName = "overview" | "sku-explorer" | "insights" | "model-performance";
-
-type HomeProps = {
-  searchParams?: Promise<{
-    view?: string;
-  }>;
-};
-
-const viewMap: Record<ViewName, ReactElement> = {
-  overview: <Overview />,
-  "sku-explorer": <SKUExplorer />,
-  insights: <InsightsFeed />,
-  "model-performance": <ModelPerformance />,
-};
-
-export default async function Home({ searchParams }: HomeProps) {
-  const params = await searchParams;
-  const view = params?.view as ViewName | undefined;
-
+export default function Page() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-6 py-10 lg:px-10">
-      {viewMap[view ?? "overview"] ?? <Overview />}
-    </main>
+    <Suspense fallback={null}>
+      <PageContent />
+    </Suspense>
   );
+}
+
+function PageContent() {
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view") || "overview";
+
+  if (view === "inventory") return <InventoryTable />;
+  if (view === "sku-explorer") return <SKUExplorer />;
+  if (view === "insights") return <InsightsFeed />;
+  if (view === "model-metrics") return <ModelMetrics />;
+  if (view === "simulation") return <Simulation />;
+
+  return <Overview />;
 }

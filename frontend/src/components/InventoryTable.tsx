@@ -1,82 +1,56 @@
-"use client";
+import type { InventorySKU } from "../lib/types";
+import StatusBadge from "./StatusBadge";
 
-import { useMemo, useState } from "react";
-import StatusBadge, { type StockStatus } from "./StatusBadge";
+interface InventoryTableProps {
+  skus: InventorySKU[];
+}
 
-export type SKU = {
-  sku_id: string;
-  status: StockStatus;
-  days_until_stockout: number;
-  recommended_order_qty: number;
-  trigger_date: string;
-};
-
-type InventoryTableProps = {
-  skus: SKU[];
-  onSelect?: (sku: SKU) => void;
-};
-
-export default function InventoryTable({ skus, onSelect }: InventoryTableProps) {
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [selectedSkuId, setSelectedSkuId] = useState<string | null>(null);
-
-  const sortedSkus = useMemo(() => {
-    return [...skus].sort((a, b) => {
-      const diff = a.days_until_stockout - b.days_until_stockout;
-      return sortDirection === "asc" ? diff : -diff;
-    });
-  }, [skus, sortDirection]);
-
-  function handleSelect(sku: SKU) {
-    setSelectedSkuId(sku.sku_id);
-    onSelect?.(sku);
-  }
-
+export default function InventoryTable({ skus }: InventoryTableProps) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-navy/10 bg-cream">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-left">
-          <thead className="bg-navy text-cream">
-            <tr>
-              <th className="px-5 py-4 text-xs font-black uppercase tracking-normal">SKU ID</th>
-              <th className="px-5 py-4 text-xs font-black uppercase tracking-normal">Status</th>
-              <th className="px-5 py-4 text-xs font-black uppercase tracking-normal">
-                <button
-                  className="font-black uppercase"
-                  onClick={() => setSortDirection((current) => (current === "asc" ? "desc" : "asc"))}
-                >
-                  Days to Stockout {sortDirection === "asc" ? "ASC" : "DESC"}
-                </button>
-              </th>
-              <th className="px-5 py-4 text-xs font-black uppercase tracking-normal">Reorder Qty</th>
-              <th className="px-5 py-4 text-xs font-black uppercase tracking-normal">Trigger Date</th>
+    <div className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
+      <table className="min-w-full divide-y divide-[#E2E8F0] text-left text-sm">
+        <thead className="bg-[#F8FAFC] text-xs uppercase tracking-wide text-[#64748B]">
+          <tr>
+            <th className="px-4 py-3 font-semibold">SKU ID</th>
+            <th className="px-4 py-3 font-semibold">Days Until Stockout</th>
+            <th className="px-4 py-3 font-semibold">Avg Daily Demand</th>
+            <th className="px-4 py-3 font-semibold">Status Badge</th>
+            <th className="px-4 py-3 font-semibold">Risk Score</th>
+            <th className="px-4 py-3 font-semibold">Recommended Order Qty</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
+          {skus.map((sku) => (
+            <tr key={sku.sku_id} className="hover:bg-[#F8FAFC]">
+              <td className="whitespace-nowrap px-4 py-3 font-semibold">{sku.sku_id}</td>
+              <td className="px-4 py-3">{sku.days_until_stockout}</td>
+              <td className="px-4 py-3">{sku.avg_daily_demand.toFixed(1)}</td>
+              <td className="px-4 py-3">
+                <StatusBadge status={sku.status} />
+              </td>
+              <td className="min-w-[180px] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#E2E8F0]">
+                    <div
+                      className="h-full rounded-full bg-[#2563EB]"
+                      style={{ width: `${Math.min(100, Math.max(0, sku.stockout_risk_score))}%` }}
+                    />
+                  </div>
+                  <span className="w-10 text-right text-xs text-[#64748B]">{Math.round(sku.stockout_risk_score)}%</span>
+                </div>
+              </td>
+              <td className="px-4 py-3">{Math.round(sku.recommended_order_qty).toLocaleString()}</td>
             </tr>
-          </thead>
-          <tbody>
-            {sortedSkus.map((sku) => {
-              const isSelected = selectedSkuId === sku.sku_id;
-
-              return (
-                <tr
-                  key={sku.sku_id}
-                  onClick={() => handleSelect(sku)}
-                  className={`cursor-pointer border-b border-navy/10 transition last:border-b-0 ${
-                    isSelected ? "bg-navy text-cream" : "hover:bg-navy/5"
-                  }`}
-                >
-                  <td className="px-5 py-4 font-black">{sku.sku_id}</td>
-                  <td className="px-5 py-4">
-                    <StatusBadge status={sku.status} />
-                  </td>
-                  <td className="px-5 py-4 font-bold">{sku.days_until_stockout}</td>
-                  <td className="px-5 py-4">{sku.recommended_order_qty.toLocaleString()}</td>
-                  <td className="px-5 py-4">{sku.trigger_date}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+          ))}
+          {skus.length === 0 ? (
+            <tr>
+              <td className="px-4 py-8 text-center text-[#64748B]" colSpan={6}>
+                No SKUs match the current filters.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
     </div>
   );
 }
