@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -36,6 +37,9 @@ FEATURE_COLUMNS = [
     "day_of_week",
     "month",
     "week_of_year",
+    "dept_id",
+    "cat_id",
+    "state_id",
     "snap_flag",
     "has_event",
     "event_cultural",
@@ -43,6 +47,8 @@ FEATURE_COLUMNS = [
     "event_religious",
     "event_sporting",
     "sell_price",
+    "price_momentum",
+    "price_change_flag",
 ]
 
 
@@ -76,7 +82,12 @@ def forecast_prophet(model: Any, horizon: int = 28) -> pd.DataFrame:
 def train_lightgbm(train_df: pd.DataFrame) -> lgb.Booster:
     """Train a LightGBM regressor on engineered cross-SKU features."""
     model_df = train_df.dropna(subset=FEATURE_COLUMNS + ["sales"]).copy()
-    dataset = lgb.Dataset(model_df[FEATURE_COLUMNS], label=model_df["sales"])
+    categorical_features = ["dept_id", "cat_id", "state_id"]
+    dataset = lgb.Dataset(
+        model_df[FEATURE_COLUMNS],
+        label=model_df["sales"],
+        categorical_feature=categorical_features,
+    )
     params = {
         "objective": "tweedie",
         "tweedie_variance_power": 1.5,
@@ -92,7 +103,10 @@ def train_lightgbm(train_df: pd.DataFrame) -> lgb.Booster:
         "random_state": 42,
         "verbosity": -1,
     }
-    return lgb.train(params, dataset, num_boost_round=500)
+    train_kwargs: dict[str, Any] = {"num_boost_round": 500}
+    if "categorical_feature" in inspect.signature(lgb.train).parameters:
+        train_kwargs["categorical_feature"] = categorical_features
+    return lgb.train(params, dataset, **train_kwargs)
 
 
 def forecast_lightgbm(booster: lgb.Booster, val_df: pd.DataFrame) -> np.ndarray:

@@ -219,10 +219,10 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     )
     store_grouped = store_daily.groupby("store_id", sort=False)["store_daily_mean"]
     store_daily["store_rolling_mean_7"] = store_grouped.transform(
-        lambda series: series.rolling(7, min_periods=1).mean()
+        lambda series: series.shift(1).rolling(7, min_periods=1).mean()
     )
     store_daily["store_rolling_mean_28"] = store_grouped.transform(
-        lambda series: series.rolling(28, min_periods=1).mean()
+        lambda series: series.shift(1).rolling(28, min_periods=1).mean()
     )
     featured = featured.merge(
         store_daily[["store_id", "date", "store_rolling_mean_7", "store_rolling_mean_28"]],
@@ -237,13 +237,31 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     featured["day_of_week"] = featured["date"].dt.dayofweek
     featured["month"] = featured["date"].dt.month
     featured["week_of_year"] = featured["date"].dt.isocalendar().week.astype(int)
-    featured["snap_flag"] = featured[["snap_CA", "snap_TX", "snap_WI"]].max(axis=1).astype(int)
+    sku_state = featured["sku_id"].str.split("_").str[-2]
+    featured["snap_flag"] = np.select(
+        [sku_state.eq("CA"), sku_state.eq("TX"), sku_state.eq("WI")],
+        [featured["snap_CA"], featured["snap_TX"], featured["snap_WI"]],
+        default=0,
+    ).astype(int)
     featured["has_event"] = featured["event_name_1"].notna().astype(int)
     event_type = featured["event_type_1"] if "event_type_1" in featured.columns else pd.Series("", index=featured.index)
     featured["event_cultural"] = (event_type == "Cultural").astype(int)
     featured["event_national"] = (event_type == "National").astype(int)
     featured["event_religious"] = (event_type == "Religious").astype(int)
     featured["event_sporting"] = (event_type == "Sporting").astype(int)
+
+    sku_parts = featured["sku_id"].str.split("_")
+    featured["dept_id"] = pd.Categorical(sku_parts.str[:2].str.join("_")).codes.astype(int)
+    featured["cat_id"] = pd.Categorical(sku_parts.str[0]).codes.astype(int)
+    featured["state_id"] = pd.Categorical(sku_state).codes.astype(int)
+
+    price_grouped = featured.groupby("sku_id", sort=False)["sell_price"]
+    rolling_price_28 = price_grouped.transform(lambda series: series.shift(1).rolling(28, min_periods=1).mean())
+    featured["price_momentum"] = (featured["sell_price"] / rolling_price_28).replace([np.inf, -np.inf], np.nan)
+    featured["price_momentum"] = featured["price_momentum"].fillna(1.0)
+    featured["price_change_flag"] = price_grouped.transform(
+        lambda series: (series.ne(series.shift(7)) & series.shift(7).notna()).astype(int).shift(1, fill_value=0)
+    )
 
     required_features = ["lag_7", "lag_14", "lag_28", "lag_56", "rolling_mean_7", "rolling_mean_28"]
     return featured.dropna(subset=required_features).reset_index(drop=True)

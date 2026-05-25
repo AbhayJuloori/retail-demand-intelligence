@@ -24,6 +24,9 @@ _cache: dict[str, tuple[object, dict[str, Any], dict[str, tuple[float, float]]]]
 _shap_cache: dict[str, list[str]] = {}
 _CALENDAR_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "calendar.csv"
 _SELL_PRICES_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "sell_prices.csv"
+_CAT_IDS = ["FOODS", "HOBBIES", "HOUSEHOLD"]
+_DEPT_IDS = ["FOODS_1", "FOODS_2", "FOODS_3", "HOBBIES_1", "HOBBIES_2", "HOUSEHOLD_1", "HOUSEHOLD_2"]
+_STATE_IDS = ["CA", "TX", "WI"]
 _sell_prices_cache: pd.DataFrame | None = None
 _sell_prices_loaded = False
 
@@ -98,6 +101,27 @@ def _sku_state(sku_id: str) -> str | None:
     return None
 
 
+def _code_from_ordered_values(value: str | None, ordered_values: list[str]) -> int:
+    if value in ordered_values:
+        return ordered_values.index(value)
+    return 0
+
+
+def _sku_hierarchy_codes(sku_id: str | None) -> dict[str, int]:
+    if sku_id is None:
+        return {"dept_id": 0, "cat_id": 0, "state_id": 0}
+
+    parts = sku_id.split("_")
+    cat_id = parts[0] if parts else None
+    dept_id = "_".join(parts[:2]) if len(parts) >= 2 else None
+    state_id = _sku_state(sku_id)
+    return {
+        "dept_id": _code_from_ordered_values(dept_id, _DEPT_IDS),
+        "cat_id": _code_from_ordered_values(cat_id, _CAT_IDS),
+        "state_id": _code_from_ordered_values(state_id, _STATE_IDS),
+    }
+
+
 def _load_sell_prices() -> pd.DataFrame | None:
     global _sell_prices_cache, _sell_prices_loaded
     if _sell_prices_loaded:
@@ -118,7 +142,12 @@ def _load_sell_prices() -> pd.DataFrame | None:
     return _sell_prices_cache
 
 
-def _last_known_sell_price(sku_id: str) -> float:
+def _last_known_sell_price(sku_id: str, model: Any | None = None) -> float:
+    if model is not None and hasattr(model, "history") and "sell_price" in model.history:
+        history_price = pd.to_numeric(model.history["sell_price"], errors="coerce").dropna()
+        if not history_price.empty:
+            return float(history_price.iloc[-1])
+
     sell_prices = _load_sell_prices()
     if sell_prices is None:
         return 1.0
@@ -144,6 +173,10 @@ def _future_calendar_flags(sku_id: str, forecast_df: pd.DataFrame) -> pd.DataFra
         {
             "snap_flag": np.zeros(len(forecast_df), dtype=int),
             "has_event": np.zeros(len(forecast_df), dtype=int),
+            "event_cultural": np.zeros(len(forecast_df), dtype=int),
+            "event_national": np.zeros(len(forecast_df), dtype=int),
+            "event_religious": np.zeros(len(forecast_df), dtype=int),
+            "event_sporting": np.zeros(len(forecast_df), dtype=int),
         }
     )
     state = _sku_state(sku_id)
@@ -151,7 +184,7 @@ def _future_calendar_flags(sku_id: str, forecast_df: pd.DataFrame) -> pd.DataFra
         return flags
 
     try:
-        calendar = pd.read_csv(_CALENDAR_PATH, usecols=["date", f"snap_{state}", "event_name_1"])
+        calendar = pd.read_csv(_CALENDAR_PATH, usecols=["date", f"snap_{state}", "event_name_1", "event_type_1"])
     except Exception:
         return flags
 
@@ -160,12 +193,18 @@ def _future_calendar_flags(sku_id: str, forecast_df: pd.DataFrame) -> pd.DataFra
     merged = dates.merge(calendar, on="date", how="left")
     flags["snap_flag"] = merged[f"snap_{state}"].fillna(0).astype(int).to_numpy()
     flags["has_event"] = merged["event_name_1"].notna().astype(int).to_numpy()
+    event_type = merged["event_type_1"]
+    flags["event_cultural"] = event_type.eq("Cultural").astype(int).to_numpy()
+    flags["event_national"] = event_type.eq("National").astype(int).to_numpy()
+    flags["event_religious"] = event_type.eq("Religious").astype(int).to_numpy()
+    flags["event_sporting"] = event_type.eq("Sporting").astype(int).to_numpy()
     return flags
 
 
 def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str | None = None) -> pd.DataFrame:
     history = [float(value) for value in model.history["y"].to_numpy()]
-    sell_price = _last_known_sell_price(sku_id) if sku_id is not None else 1.0
+    sell_price = _last_known_sell_price(sku_id, model) if sku_id is not None else 1.0
+    hierarchy_codes = _sku_hierarchy_codes(sku_id)
     rows: list[dict[str, float | int]] = []
 
     for _, forecast_row in forecast_df.iterrows():
@@ -176,23 +215,31 @@ def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str
         def lag_value(lag: int) -> float:
             return current_history[-lag] if len(current_history) >= lag else fallback
 
+        rolling_7 = current_history[-7:]
+        rolling_28 = current_history[-28:]
+        # Prediction artifacts do not include store-wide history, so use SKU training history as the non-zero fallback.
+        store_rolling_mean_7 = float(np.mean(rolling_7))
+        store_rolling_mean_28 = float(np.mean(rolling_28))
         row = {
-            "lag_1": 0.0,
-            "lag_3": 0.0,
+            "lag_1": lag_value(1),
+            "lag_3": lag_value(3),
             "lag_7": lag_value(7),
             "lag_14": lag_value(14),
             "lag_28": lag_value(28),
-            "lag_56": 0.0,
-            "lag_364": 0.0,
-            "rolling_mean_7": float(np.mean(current_history[-7:])),
-            "rolling_mean_28": float(np.mean(current_history[-28:])),
-            "rolling_std_7": 0.0,
-            "rolling_std_28": 0.0,
-            "store_rolling_mean_7": 0.0,
-            "store_rolling_mean_28": 0.0,
+            "lag_56": lag_value(56),
+            "lag_364": lag_value(364),
+            "rolling_mean_7": store_rolling_mean_7,
+            "rolling_mean_28": store_rolling_mean_28,
+            "rolling_std_7": float(np.std(rolling_7, ddof=1)) if len(rolling_7) >= 2 else 0.0,
+            "rolling_std_28": float(np.std(rolling_28, ddof=1)) if len(rolling_28) >= 2 else 0.0,
+            "store_rolling_mean_7": store_rolling_mean_7,
+            "store_rolling_mean_28": store_rolling_mean_28,
             "day_of_week": int(date.dayofweek),
             "month": int(date.month),
             "week_of_year": int(date.isocalendar().week),
+            "dept_id": hierarchy_codes["dept_id"],
+            "cat_id": hierarchy_codes["cat_id"],
+            "state_id": hierarchy_codes["state_id"],
             "snap_flag": 0,
             "has_event": 0,
             "event_cultural": 0,
@@ -200,6 +247,8 @@ def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str
             "event_religious": 0,
             "event_sporting": 0,
             "sell_price": sell_price,
+            "price_momentum": 1.0,
+            "price_change_flag": 0,
         }
         rows.append(row)
         history.append(max(0.0, float(forecast_row["yhat"])))
@@ -225,6 +274,8 @@ def predict(
     calendar_flags = _future_calendar_flags(sku_id, forecast_df)
     future_features_df["snap_flag"] = calendar_flags["snap_flag"]
     future_features_df["has_event"] = calendar_flags["has_event"]
+    for event_feature in ("event_cultural", "event_national", "event_religious", "event_sporting"):
+        future_features_df[event_feature] = calendar_flags[event_feature]
     lgbm_preds = forecast_lightgbm(booster, future_features_df)
     w_prophet, w_lightgbm = weights.get(sku_id, (0.5, 0.5))
     blended = blend(forecast_df["yhat"].to_numpy(), lgbm_preds, w_prophet, w_lightgbm)
