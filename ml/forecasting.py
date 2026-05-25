@@ -89,17 +89,10 @@ def train_lightgbm(train_df: pd.DataFrame) -> lgb.Booster:
     model_df = train_df.dropna(subset=FEATURE_COLUMNS + ["sales"]).copy()
     model_df["date"] = pd.to_datetime(model_df["date"])
 
-    validation_dates = model_df["date"].dropna().sort_values().unique()[-LIGHTGBM_VALIDATION_DAYS:]
-    is_validation = model_df["date"].isin(validation_dates)
-    train_model_df = model_df.loc[~is_validation]
-    valid_model_df = model_df.loc[is_validation]
-    use_early_stopping = False
-    train_model_df = model_df
-
     categorical_features = ["dept_id", "cat_id", "state_id"]
     dataset = lgb.Dataset(
-        train_model_df[FEATURE_COLUMNS],
-        label=train_model_df["sales"],
+        model_df[FEATURE_COLUMNS],
+        label=model_df["sales"],
         categorical_feature=categorical_features,
     )
     params = {
@@ -111,20 +104,6 @@ def train_lightgbm(train_df: pd.DataFrame) -> lgb.Booster:
         "verbose": -1,
     }
     train_kwargs: dict[str, Any] = {"num_boost_round": LIGHTGBM_NUM_BOOST_ROUND}
-    if use_early_stopping:
-        validation_dataset = lgb.Dataset(
-            valid_model_df[FEATURE_COLUMNS],
-            label=valid_model_df["sales"],
-            categorical_feature=categorical_features,
-            reference=dataset,
-        )
-        train_kwargs.update(
-            {
-                "valid_sets": [validation_dataset],
-                "valid_names": ["lgb_validation"],
-                "callbacks": [lgb.early_stopping(LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)],
-            }
-        )
     if "categorical_feature" in inspect.signature(lgb.train).parameters:
         train_kwargs["categorical_feature"] = categorical_features
     return lgb.train(params, dataset, **train_kwargs)
