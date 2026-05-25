@@ -199,7 +199,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     featured = featured.sort_values(["sku_id", "date"]).reset_index(drop=True)
     grouped = featured.groupby("sku_id", sort=False)["sales"]
 
-    for lag in (1, 3, 7, 14, 28, 56, 364):
+    for lag in (1, 3, 7, 14, 28, 56, 91, 182, 364):
         featured[f"lag_{lag}"] = grouped.shift(lag)
     featured["lag_364"] = featured["lag_364"].fillna(0.0)
 
@@ -237,6 +237,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     featured["day_of_week"] = featured["date"].dt.dayofweek
     featured["month"] = featured["date"].dt.month
     featured["week_of_year"] = featured["date"].dt.isocalendar().week.astype(int)
+    featured["day_of_month"] = featured["date"].dt.day
     sku_state = featured["sku_id"].str.split("_").str[-2]
     featured["snap_flag"] = np.select(
         [sku_state.eq("CA"), sku_state.eq("TX"), sku_state.eq("WI")],
@@ -254,6 +255,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     featured["dept_id"] = pd.Categorical(sku_parts.str[:2].str.join("_")).codes.astype(int)
     featured["cat_id"] = pd.Categorical(sku_parts.str[0]).codes.astype(int)
     featured["state_id"] = pd.Categorical(sku_state).codes.astype(int)
+    featured["item_id"] = pd.Categorical(sku_parts.str[:3].str.join("_")).codes.astype(int)
 
     price_grouped = featured.groupby("sku_id", sort=False)["sell_price"]
     rolling_price_28 = price_grouped.transform(lambda series: series.shift(1).rolling(28, min_periods=1).mean())

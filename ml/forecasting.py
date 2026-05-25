@@ -28,6 +28,8 @@ FEATURE_COLUMNS = [
     "lag_14",
     "lag_28",
     "lag_56",
+    "lag_91",
+    "lag_182",
     "lag_364",
     "rolling_mean_7",
     "rolling_mean_28",
@@ -38,9 +40,11 @@ FEATURE_COLUMNS = [
     "day_of_week",
     "month",
     "week_of_year",
+    "day_of_month",
     "dept_id",
     "cat_id",
     "state_id",
+    "item_id",
     "snap_flag",
     "has_event",
     "event_cultural",
@@ -52,7 +56,7 @@ FEATURE_COLUMNS = [
     "price_change_flag",
 ]
 
-LIGHTGBM_NUM_BOOST_ROUND = 500
+LIGHTGBM_NUM_BOOST_ROUND = 700
 
 
 def train_prophet(train_df: pd.DataFrame, sku_id: str) -> Any | None:
@@ -87,7 +91,7 @@ def train_lightgbm(train_df: pd.DataFrame) -> lgb.Booster:
     model_df = train_df.dropna(subset=FEATURE_COLUMNS + ["sales"]).copy()
     model_df["date"] = pd.to_datetime(model_df["date"])
 
-    categorical_features = ["dept_id", "cat_id", "state_id"]
+    categorical_features = ["dept_id", "cat_id", "state_id", "item_id"]
     dataset = lgb.Dataset(
         model_df[FEATURE_COLUMNS],
         label=model_df["sales"],

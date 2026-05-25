@@ -109,16 +109,18 @@ def _code_from_ordered_values(value: str | None, ordered_values: list[str]) -> i
 
 def _sku_hierarchy_codes(sku_id: str | None) -> dict[str, int]:
     if sku_id is None:
-        return {"dept_id": 0, "cat_id": 0, "state_id": 0}
+        return {"dept_id": 0, "cat_id": 0, "state_id": 0, "item_id": 0}
 
     parts = sku_id.split("_")
     cat_id = parts[0] if parts else None
     dept_id = "_".join(parts[:2]) if len(parts) >= 2 else None
+    item_id = "_".join(parts[:3]) if len(parts) >= 3 else None
     state_id = _sku_state(sku_id)
     return {
         "dept_id": _code_from_ordered_values(dept_id, _DEPT_IDS),
         "cat_id": _code_from_ordered_values(cat_id, _CAT_IDS),
         "state_id": _code_from_ordered_values(state_id, _STATE_IDS),
+        "item_id": abs(hash(item_id)) % 10000 if item_id is not None else 0,
     }
 
 
@@ -227,6 +229,8 @@ def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str
             "lag_14": lag_value(14),
             "lag_28": lag_value(28),
             "lag_56": lag_value(56),
+            "lag_91": lag_value(91),
+            "lag_182": lag_value(182),
             "lag_364": lag_value(364),
             "rolling_mean_7": store_rolling_mean_7,
             "rolling_mean_28": store_rolling_mean_28,
@@ -237,9 +241,11 @@ def _future_lightgbm_features(model: Any, forecast_df: pd.DataFrame, sku_id: str
             "day_of_week": int(date.dayofweek),
             "month": int(date.month),
             "week_of_year": int(date.isocalendar().week),
+            "day_of_month": int(date.day),
             "dept_id": hierarchy_codes["dept_id"],
             "cat_id": hierarchy_codes["cat_id"],
             "state_id": hierarchy_codes["state_id"],
+            "item_id": hierarchy_codes["item_id"],
             "snap_flag": 0,
             "has_event": 0,
             "event_cultural": 0,
