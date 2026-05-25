@@ -9,6 +9,7 @@ from typing import Any
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 
 try:
     from prophet import Prophet
@@ -139,11 +140,42 @@ def ensemble_weights(
     prophet_preds: np.ndarray | pd.Series | list[float],
     lgbm_preds: np.ndarray | pd.Series | list[float],
     actuals: np.ndarray | pd.Series | list[float],
-) -> tuple[float, float]:
-    """Find validation weights minimizing simplified uniform WRMSSE."""
+    naive_preds: np.ndarray | pd.Series | list[float] | None = None,
+) -> tuple[float, float] | tuple[float, float, float]:
+    """Find blend weights minimizing holdout RMSE."""
     prophet_arr = np.asarray(prophet_preds, dtype=float)
     lgbm_arr = np.asarray(lgbm_preds, dtype=float)
     actual_arr = np.asarray(actuals, dtype=float)
+
+    if naive_preds is not None:
+        naive_arr = np.asarray(naive_preds, dtype=float)
+        valid = ~(np.isnan(prophet_arr) | np.isnan(lgbm_arr) | np.isnan(naive_arr) | np.isnan(actual_arr))
+        if valid.sum() < 14:
+            return 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0
+
+        components = np.vstack([prophet_arr[valid], lgbm_arr[valid], naive_arr[valid]])
+        target = actual_arr[valid]
+
+        def objective(weights: np.ndarray) -> float:
+            blended = np.dot(weights, components)
+            return float(np.sqrt(np.mean((target - blended) ** 2)))
+
+        result = minimize(
+            objective,
+            x0=np.asarray([0.45, 0.45, 0.10], dtype=float),
+            method="SLSQP",
+            bounds=[(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+            constraints={"type": "eq", "fun": lambda weights: float(np.sum(weights) - 1.0)},
+        )
+        if not result.success or not np.isfinite(float(result.fun)):
+            return 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0
+
+        weights = np.clip(np.asarray(result.x, dtype=float), 0.0, 1.0)
+        weight_sum = float(weights.sum())
+        if weight_sum <= 0.0:
+            return 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0
+        weights = weights / weight_sum
+        return float(weights[0]), float(weights[1]), float(weights[2])
 
     best_weight = 0.0
     best_score = float("inf")
@@ -163,10 +195,34 @@ def blend(
     lgbm_preds: np.ndarray | pd.Series | list[float],
     w_p: float,
     w_l: float,
+    naive_preds: np.ndarray | pd.Series | list[float] | None = None,
+    w_n: float = 0.0,
 ) -> np.ndarray:
-    """Blend Prophet and LightGBM forecasts."""
+    """Blend Prophet, LightGBM, and optionally seasonal-naive forecasts."""
     blended = (w_p * np.asarray(prophet_preds, dtype=float)) + (w_l * np.asarray(lgbm_preds, dtype=float))
+    if naive_preds is not None:
+        blended = blended + (w_n * np.asarray(naive_preds, dtype=float))
     return np.clip(blended, 0.0, None)
+
+
+def seasonal_naive_forecast(
+    source_df: pd.DataFrame,
+    target_df: pd.DataFrame,
+    season_days: int = 364,
+) -> np.ndarray:
+    """Forecast target rows with same-SKU sales from season_days prior."""
+    source = source_df[["sku_id", "date", "sales"]].copy()
+    source["date"] = pd.to_datetime(source["date"])
+    source = source.sort_values(["sku_id", "date"]).reset_index(drop=True)
+    source["seasonal_naive"] = source.groupby("sku_id", sort=False)["sales"].shift(season_days)
+
+    target = target_df[["sku_id", "date"]].copy()
+    target["date"] = pd.to_datetime(target["date"])
+    target["_row_id"] = np.arange(len(target))
+    merged = target.merge(source[["sku_id", "date", "seasonal_naive"]], on=["sku_id", "date"], how="left")
+    merged = merged.sort_values("_row_id")
+    preds = merged["seasonal_naive"].fillna(0.0).to_numpy(dtype=float)
+    return np.clip(preds, 0.0, None)
 
 
 def wrmsse(actual: pd.Series, predicted: pd.Series, scale: float, weight: float = 1.0) -> float:
@@ -233,14 +289,27 @@ def rolling_backtest(
         if prophet_model is None:
             prophet_preds = np.zeros(len(sku_holdout), dtype=float)
             prophet_rmse = float("nan")
-            w_prophet, w_lightgbm = 0.0, 1.0
+            w_prophet, w_lightgbm, w_naive = 0.0, 0.5, 0.5
         else:
             prophet_forecast = forecast_prophet(prophet_model, horizon=len(sku_holdout))
             prophet_preds = prophet_forecast["yhat"].to_numpy(dtype=float)
             prophet_rmse = float(np.sqrt(np.mean((sku_holdout["sales"].to_numpy(dtype=float) - prophet_preds) ** 2)))
-            w_prophet, w_lightgbm = ensemble_weights.get(sku_id, (0.5, 0.5))
+            sku_weights = ensemble_weights.get(sku_id, (0.5, 0.5, 0.0))
+            if len(sku_weights) == 2:
+                w_prophet, w_lightgbm = sku_weights
+                w_naive = 0.0
+            else:
+                w_prophet, w_lightgbm, w_naive = sku_weights
 
-        ensemble_preds = blend(prophet_preds, lgbm_preds, float(w_prophet), float(w_lightgbm))
+        naive_preds = seasonal_naive_forecast(ordered, sku_holdout)
+        ensemble_preds = blend(
+            prophet_preds,
+            lgbm_preds,
+            float(w_prophet),
+            float(w_lightgbm),
+            naive_preds,
+            float(w_naive),
+        )
         actuals = sku_holdout["sales"].to_numpy(dtype=float)
         lgbm_rmse = float(np.sqrt(np.mean((actuals - lgbm_preds) ** 2)))
         ensemble_rmse = float(np.sqrt(np.mean((actuals - ensemble_preds) ** 2)))
