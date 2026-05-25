@@ -70,20 +70,13 @@ def main(
         )
 
         booster = train_lightgbm(train_df)
-        lgbm_n_estimators = getattr(booster, "best_iteration", None) or LIGHTGBM_NUM_BOOST_ROUND
         mlflow.log_params(
             {
                 "lgbm_objective": "tweedie",
-                "lgbm_num_leaves": 127,
-                "lgbm_n_estimators": int(lgbm_n_estimators),
+                "lgbm_tweedie_variance_power": 1.5,
+                "lgbm_num_leaves": 31,
+                "lgbm_n_estimators": LIGHTGBM_NUM_BOOST_ROUND,
                 "lgbm_learning_rate": 0.05,
-                "lgbm_min_data_in_leaf": 20,
-                "lgbm_feature_fraction": 0.8,
-                "lgbm_bagging_fraction": 0.9,
-                "lgbm_bagging_freq": 5,
-                "lgbm_lambda_l1": 0.1,
-                "lgbm_lambda_l2": 0.1,
-                "lgbm_max_bin": 255,
             }
         )
         try:
