@@ -1,9 +1,34 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { apiFetch } from "../lib/api";
 import { DEMO_SKUS } from "../lib/demo";
-import type { InsightResponse, InventoryResponse, InventorySKU } from "../lib/types";
+import type { InventorySKU } from "../lib/types";
+
+/** Call Groq directly from the browser — no backend required. */
+async function callLLM(key: string, sku: InventorySKU): Promise<string> {
+  const prompt = `You are a concise supply chain analyst. Write 2-3 plain-English sentences about this SKU's inventory situation and what action to take:
+
+SKU: ${sku.sku_id}  |  Status: ${sku.status}
+Days until stockout: ${sku.days_until_stockout}  |  Avg demand: ${sku.avg_daily_demand} units/day
+Current stock: ${sku.current_stock}  |  Recommended order: ${sku.recommended_order_qty} units
+Trigger date: ${sku.trigger_date}
+
+Focus on the risk driver and specific timing. Be direct.`;
+
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 160,
+      temperature: 0.3,
+    }),
+  });
+  if (!res.ok) throw new Error(`Groq error ${res.status}: ${res.statusText}`);
+  const data = await res.json();
+  return (data.choices[0].message.content as string).trim();
+}
 
 interface InsightCardData {
   sku: InventorySKU;
@@ -75,32 +100,18 @@ export default function InsightsFeed() {
     setError(null);
     setVisibleCount(3);
     try {
-      const inventory = await apiFetch<InventoryResponse>("/inventory?limit=50");
-      const topSkus = inventory.skus
-        .filter((sku) => sku.status !== "OK")
+      const atRisk = DEMO_SKUS.filter((s) => s.status !== "OK")
         .sort((a, b) => a.days_until_stockout - b.days_until_stockout)
         .slice(0, 10);
       const insights = await Promise.all(
-        topSkus.map(async (sku) => {
-          const data = await apiFetch<InsightResponse>("/insights", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...(key ? { "x-llm-key": key } : {}) },
-            body: JSON.stringify({
-              sku_id: sku.sku_id,
-              status: sku.status,
-              days_until_stockout: sku.days_until_stockout,
-              avg_daily_demand: sku.avg_daily_demand,
-              recommended_order_qty: sku.recommended_order_qty,
-              trigger_date: sku.trigger_date,
-              top_shap_features: [],
-            }),
-          });
-          return { sku, text: data.insight };
+        atRisk.map(async (sku) => {
+          const text = await callLLM(key, sku);
+          return { sku, text };
         }),
       );
       setCards(insights);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load insights");
+      setError(err instanceof Error ? err.message : "Could not reach Groq. Check your API key and try again.");
     } finally {
       setLoading(false);
     }
@@ -121,8 +132,9 @@ export default function InsightsFeed() {
         <div className="mb-10 border-b border-slate-100 pb-8">
           <h1 className="text-2xl font-semibold text-slate-900">Inventory Insight Feed</h1>
           <p className="mt-3 max-w-lg text-sm leading-7 text-slate-500">
-            Connect an LLM to generate plain-language narratives for your highest-risk SKUs — what's happening,
-            why demand is shifting, and exactly what to order and when.
+            Connect a Groq API key to generate plain-language narratives for your highest-risk SKUs — what's
+            happening, why demand is shifting, and exactly what to order and when. Calls go directly from your
+            browser to Groq — no server needed.
           </p>
           <form className="mt-5 flex max-w-md gap-2" onSubmit={submitApiKey}>
             <input
@@ -140,7 +152,7 @@ export default function InsightsFeed() {
             </button>
           </form>
           <div className="mt-3 flex flex-wrap gap-2">
-            {["Groq (free tier)", "OpenAI", "Anthropic", "Google Gemini"].map((p) => (
+            {["Groq (free · recommended)", "OpenAI", "Anthropic", "Google Gemini"].map((p) => (
               <span key={p} className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500">
                 {p}
               </span>

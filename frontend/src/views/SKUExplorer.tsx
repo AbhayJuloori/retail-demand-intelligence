@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ForecastChart from "../components/ForecastChart";
-import Spinner from "../components/Spinner";
-import { apiFetch } from "../lib/api";
 import { DEMO_SKUS } from "../lib/demo";
-import type { ForecastResponse, ForecastRow, InventorySKU } from "../lib/types";
+import type { ForecastRow, InventorySKU } from "../lib/types";
 
 function statusDot(status: string) {
   if (status === "STOCKOUT IMMINENT") return "bg-red-500";
@@ -52,46 +50,15 @@ function syntheticForecast(sku: InventorySKU): ForecastRow[] {
 }
 
 export default function SKUExplorer() {
-  const [skus, setSkus] = useState<InventorySKU[]>(DEMO_SKUS);
   const [selectedId, setSelectedId] = useState(DEMO_SKUS[0].sku_id);
-  const [forecast, setForecast] = useState<ForecastRow[]>([]);
-  const [forecastMeta, setForecastMeta] = useState<{ w_prophet: number; w_lgbm: number; features: string[] } | null>(null);
-  const [isDemo, setIsDemo] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
-  /* Left panel always shows the curated DEMO_SKUS — real API is called per-SKU for forecast only */
-
-  /* Load forecast whenever selected SKU changes */
-  useEffect(() => {
-    if (!selectedId) return;
-    const sku = skus.find((s) => s.sku_id === selectedId);
-    if (!sku) return;
-    loadForecast(sku);
-  }, [selectedId, skus]);
-
-  async function loadForecast(sku: InventorySKU) {
-    setLoading(true);
-    try {
-      const data = await apiFetch<ForecastResponse>(`/forecast/${encodeURIComponent(sku.sku_id)}?horizon=28`);
-      setForecast(data.forecast);
-      setForecastMeta({ w_prophet: data.w_prophet, w_lgbm: data.w_lightgbm, features: data.top_3_features });
-      setIsDemo(false);
-    } catch {
-      /* API doesn't have this SKU — show a synthetic forecast so the chart is never empty */
-      setForecast(syntheticForecast(sku));
-      setForecastMeta(null);
-      setIsDemo(true);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const selected = useMemo(() => skus.find((s) => s.sku_id === selectedId) ?? skus[0], [selectedId, skus]);
+  const selected = useMemo(() => DEMO_SKUS.find((s) => s.sku_id === selectedId) ?? DEMO_SKUS[0], [selectedId]);
+  const forecast = useMemo(() => syntheticForecast(selected), [selected]);
 
   const visible = useMemo(
-    () => skus.filter((s) => s.sku_id.toLowerCase().includes(search.toLowerCase())),
-    [skus, search],
+    () => DEMO_SKUS.filter((s) => s.sku_id.toLowerCase().includes(search.toLowerCase())),
+    [search],
   );
 
   return (
@@ -138,7 +105,7 @@ export default function SKUExplorer() {
         </ul>
 
         <div className="border-t border-slate-100 px-4 py-3">
-          <p className="text-[11px] text-slate-400">{skus.length} SKUs loaded</p>
+          <p className="text-[11px] text-slate-400">{DEMO_SKUS.length} demo SKUs</p>
         </div>
       </aside>
 
@@ -188,52 +155,19 @@ export default function SKUExplorer() {
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">28-Day Demand Forecast</h3>
                 <p className="mt-0.5 text-xs text-slate-400">
-                  {isDemo
-                    ? "Synthetic forecast — model not trained on this SKU"
-                    : forecastMeta
-                      ? `Prophet ${Math.round(forecastMeta.w_prophet * 100)}% · LightGBM ${Math.round(forecastMeta.w_lgbm * 100)}% blend`
-                      : "Blended forecast"}
+                  Synthetic forecast based on avg demand · {selected.avg_daily_demand.toFixed(1)} units/day
                 </p>
               </div>
-              {isDemo && (
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
-                  Illustrative
-                </span>
-              )}
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+                Illustrative
+              </span>
             </div>
           </div>
           <div className="p-5">
-            {loading ? (
-              <div className="flex h-[280px] items-center justify-center">
-                <Spinner />
-              </div>
-            ) : (
-              <ForecastChart forecast={forecast} />
-            )}
+            <ForecastChart forecast={forecast} />
           </div>
         </div>
 
-        {/* Top features — only when real model data available */}
-        {forecastMeta && forecastMeta.features.length > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-900">Top demand drivers</h3>
-            <p className="mt-0.5 text-xs text-slate-400">SHAP features with highest influence on this SKU's forecast</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {forecastMeta.features.map((f, i) => (
-                <span
-                  key={f}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    i === 0
-                      ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {f}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
       </section>
     </div>
   );

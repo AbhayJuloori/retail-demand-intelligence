@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import SHAPChart from "../components/SHAPChart";
-import Spinner from "../components/Spinner";
-import { apiFetch } from "../lib/api";
-import type { MetricsResponse } from "../lib/types";
+import { STATIC_METRICS } from "../lib/static";
 
 const BENCHMARKS = [
   { label: "Seasonal naive baseline", score: 1.0, note: "No ML — repeat last year's pattern" },
@@ -26,30 +23,7 @@ function barWidth(score: number) {
 }
 
 export default function ModelMetrics() {
-  const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
-      setMetrics(await apiFetch<MetricsResponse>("/metrics"));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load metrics");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading) return <Spinner />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
-  if (!metrics) return null;
-
+  const metrics = STATIC_METRICS;
   const score = metrics.val_wrmsse ?? 0;
 
   return (
@@ -196,17 +170,3 @@ export default function ModelMetrics() {
   );
 }
 
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="rounded-xl border border-red-100 bg-red-50 p-6">
-      <h2 className="font-semibold text-red-800">Could not load model metrics</h2>
-      <p className="mt-1 text-sm text-red-700">{message}</p>
-      <button
-        className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-        onClick={onRetry}
-      >
-        Retry
-      </button>
-    </div>
-  );
-}

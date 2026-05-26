@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { DEMO_SKUS } from "../lib/demo";
-import { apiFetch } from "../lib/api";
-import type { InventorySKU, MetricsResponse } from "../lib/types";
+import { STATIC_METRICS } from "../lib/static";
+import type { InventorySKU } from "../lib/types";
 
 function rowAccent(status: string) {
   if (status === "STOCKOUT IMMINENT") return "border-l-red-500";
@@ -24,15 +24,9 @@ function statusDot(status: string) {
 }
 
 export default function Overview() {
-  const [wrmsse, setWrmsse] = useState<number | null>(null);
+  const wrmsse = STATIC_METRICS.val_wrmsse ?? 0;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-
-  useEffect(() => {
-    apiFetch<MetricsResponse>("/metrics")
-      .then((m) => setWrmsse(m.val_wrmsse))
-      .catch(() => null);
-  }, []);
 
   const stockout = useMemo(() => DEMO_SKUS.filter((s) => s.status === "STOCKOUT IMMINENT").length, []);
   const atRisk = useMemo(() => DEMO_SKUS.filter((s) => s.status === "AT RISK").length, []);
@@ -81,7 +75,7 @@ export default function Overview() {
         />
         <KPICard
           label="WRMSSE"
-          value={wrmsse !== null ? wrmsse.toFixed(3) : "—"}
+          value={wrmsse.toFixed(3)}
           sub="Forecast accuracy score"
           color="blue"
         />

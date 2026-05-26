@@ -35,5 +35,8 @@ mlruns/
 # Frontend
 node_modules/
 .next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
 
-# AI tool files (not for public repo)
+# AI tool files
+**/memory/

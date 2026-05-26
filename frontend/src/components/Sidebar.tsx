@@ -2,6 +2,8 @@
 
 import { useSearchParams } from "next/navigation";
 
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 const navItems = [
   {
     label: "Overview",
@@ -67,7 +69,7 @@ export function Sidebar() {
             return (
               <li key={item.view}>
                 <a
-                  href={`/?view=${item.view}`}
+                  href={`${BASE}/?view=${item.view}`}
                   aria-current={active ? "page" : undefined}
                   className={`flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${
                     active
