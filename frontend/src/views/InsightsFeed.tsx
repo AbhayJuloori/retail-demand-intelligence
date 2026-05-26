@@ -2,6 +2,7 @@
 
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { DEMO_SKUS } from "../lib/demo";
 import type { InsightResponse, InventoryResponse, InventorySKU } from "../lib/types";
 
 interface InsightCardData {
@@ -12,54 +13,18 @@ interface InsightCardData {
 
 const DEMO_CARDS: InsightCardData[] = [
   {
-    sku: {
-      sku_id: "HOUSEHOLD_1_009_TX_2",
-      status: "STOCKOUT IMMINENT",
-      days_until_stockout: 3,
-      avg_daily_demand: 4.1,
-      current_stock: 12,
-      safety_stock: 80,
-      reorder_point: 58,
-      eoq: 140,
-      stockout_risk_score: 95,
-      recommended_order_qty: 140,
-      trigger_date: "2026-05-28",
-    },
-    text: "Only 3 days of runway remaining — this SKU needs action today. Demand is running at 4.1 units/day with strong weekend peaks, and a price drop last week lifted volume by 18%, accelerating depletion faster than the model's baseline. Standard lead time of 7 days already exceeds the current window. An emergency order of 140 units (full EOQ) placed now is the only path to avoiding a gap on shelf.",
+    sku: DEMO_SKUS.find((s) => s.sku_id === "HOUSEHOLD_1_009_TX_2")!,
+    text: "Only 2 days of runway remaining — this SKU needs action today. Demand is running at 4.1 units/day with strong weekend peaks, and a price drop last week lifted volume by 18%, accelerating depletion faster than the model's baseline. Standard lead time of 7 days already exceeds the current window. An emergency order of 140 units (full EOQ) placed now is the only path to avoiding a gap on shelf.",
     demo: true,
   },
   {
-    sku: {
-      sku_id: "FOODS_3_090_CA_1",
-      status: "AT RISK",
-      days_until_stockout: 11,
-      avg_daily_demand: 7.2,
-      current_stock: 38,
-      safety_stock: 100,
-      reorder_point: 75,
-      eoq: 120,
-      stockout_risk_score: 72,
-      recommended_order_qty: 95,
-      trigger_date: "2026-06-01",
-    },
-    text: "Stock is sitting at 38% of safety threshold with 11 days until projected stockout. Average demand of 7.2 units/day is steady, but lag-7 and rolling_mean_28 are both trending up — a holiday event in 9 days could spike demand 2–3× above baseline. The 7-day lead time leaves very little margin. Placing an order of 95 units by June 1st keeps inventory above the safety line through the peak.",
+    sku: DEMO_SKUS.find((s) => s.sku_id === "FOODS_3_090_CA_1")!,
+    text: "Stock is sitting at 32% of safety threshold with 8 days until projected stockout. Average demand of 7.2 units/day is steady, but lag-7 and rolling_mean_28 are both trending up — a holiday event in 6 days could spike demand 2–3× above baseline. The 7-day lead time leaves virtually no margin. Placing an order of 95 units by June 1st keeps inventory above the safety line through the peak.",
     demo: true,
   },
   {
-    sku: {
-      sku_id: "HOBBIES_2_022_WI_1",
-      status: "OK",
-      days_until_stockout: 45,
-      avg_daily_demand: 2.3,
-      current_stock: 104,
-      safety_stock: 35,
-      reorder_point: 16,
-      eoq: 55,
-      stockout_risk_score: 8,
-      recommended_order_qty: 0,
-      trigger_date: "2026-07-09",
-    },
-    text: "Inventory is healthy with 45 days of runway — well above the 7-day lead time buffer. Demand is low and stable at 2.3 units/day. Lag_364 data shows a +35% July uplift from the prior year for this hobbies category in Wisconsin, likely tied to the summer recreation season. No action needed now, but pre-positioning ~55 units around July 9th would head off any rush ordering during the seasonal uptick.",
+    sku: DEMO_SKUS.find((s) => s.sku_id === "HOBBIES_2_022_WI_1")!,
+    text: "Inventory is healthy with 19 days of runway — above the 7-day lead time buffer but tightening. Demand is moderate at 3.7 units/day. Lag_364 data shows a +35% July uplift from the prior year for this hobbies category in Wisconsin, likely tied to the summer recreation season. Plan a pre-position of ~75 units around June 12th to stay ahead of the seasonal curve without rush ordering.",
     demo: true,
   },
 ];

@@ -3,7 +3,6 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import InsightsFeed from "../views/InsightsFeed";
-import InventoryTable from "../views/InventoryTable";
 import ModelMetrics from "../views/ModelMetrics";
 import Overview from "../views/Overview";
 import Simulation from "../views/Simulation";
@@ -21,7 +20,6 @@ function PageContent() {
   const searchParams = useSearchParams();
   const view = searchParams.get("view") || "overview";
 
-  if (view === "inventory") return <InventoryTable />;
   if (view === "sku-explorer") return <SKUExplorer />;
   if (view === "insights") return <InsightsFeed />;
   if (view === "model-metrics") return <ModelMetrics />;
