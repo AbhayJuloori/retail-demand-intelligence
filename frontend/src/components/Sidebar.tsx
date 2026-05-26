@@ -24,17 +24,20 @@ export function Sidebar() {
   const currentView = searchParams.get("view") || "overview";
 
   return (
-    <aside className="fixed inset-y-0 left-0 flex w-[240px] flex-col bg-[#0F172A] px-4 py-6 text-white">
-      <div className="px-3 text-xl font-bold tracking-tight">Demand Intel</div>
-      <nav className="mt-8 flex flex-col gap-2">
+    <aside className="fixed inset-y-0 left-0 flex w-[240px] flex-col bg-slate-900 px-3 py-5 text-white">
+      <div className="px-3 pb-6">
+        <span className="text-sm font-semibold tracking-tight text-white">demand intel</span>
+        <p className="mt-0.5 text-xs text-slate-500">M5 Walmart · Retail forecasting</p>
+      </div>
+      <nav className="flex flex-col gap-0.5">
         {navItems.map((item) => {
           const active = currentView === item.view;
           return (
             <a
               key={item.view}
               href={`/?view=${item.view}`}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
-                active ? "bg-[#2563EB] text-white" : "text-[#94A3B8] hover:bg-[#1E293B] hover:text-white"
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                active ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
               }`}
             >
               <Icon path={item.icon} />
@@ -53,11 +56,8 @@ export function TopBar() {
   const active = navItems.find((item) => item.view === currentView) ?? navItems[0];
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-[#E2E8F0] bg-[#F8FAFC] px-8">
-      <h1 className="text-xl font-bold text-[#0F172A]">{active.label}</h1>
-      <span className="rounded-full border border-[#E2E8F0] bg-white px-3 py-1 text-sm font-semibold text-[#64748B]">
-        API: Local
-      </span>
+    <header className="sticky top-0 z-10 flex h-14 items-center border-b border-slate-100 bg-white px-8">
+      <h1 className="text-sm font-semibold text-slate-900">{active.label}</h1>
     </header>
   );
 }

@@ -5,20 +5,20 @@ interface KPICardProps {
   tone?: "blue" | "green" | "amber" | "red" | "slate";
 }
 
-const toneClasses = {
-  blue: "text-[#2563EB]",
-  green: "text-[#16A34A]",
-  amber: "text-[#D97706]",
-  red: "text-[#DC2626]",
-  slate: "text-[#0F172A]",
+const valueColor = {
+  blue: "text-blue-600",
+  green: "text-emerald-600",
+  amber: "text-amber-600",
+  red: "text-red-600",
+  slate: "text-slate-900",
 };
 
 export default function KPICard({ title, value, note, tone = "slate" }: KPICardProps) {
   return (
-    <section className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-[#64748B]">{title}</p>
-      <p className={`mt-3 text-3xl font-bold ${toneClasses[tone]}`}>{value}</p>
-      {note ? <p className="mt-2 text-sm text-[#64748B]">{note}</p> : null}
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</p>
+      <p className={`mt-3 text-3xl font-bold tabular-nums ${valueColor[tone]}`}>{value}</p>
+      {note ? <p className="mt-1.5 text-xs text-slate-400">{note}</p> : null}
     </section>
   );
 }

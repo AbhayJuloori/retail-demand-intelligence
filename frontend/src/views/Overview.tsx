@@ -7,6 +7,35 @@ import Spinner from "../components/Spinner";
 import { apiFetch } from "../lib/api";
 import type { InventoryResponse, InventorySKU, MetricsResponse } from "../lib/types";
 
+const PINNED_SKUS: InventorySKU[] = [
+  {
+    sku_id: "HOUSEHOLD_1_009_TX_2",
+    status: "STOCKOUT IMMINENT",
+    days_until_stockout: 3,
+    avg_daily_demand: 4.1,
+    current_stock: 12,
+    safety_stock: 80,
+    reorder_point: 58,
+    eoq: 140,
+    stockout_risk_score: 95,
+    recommended_order_qty: 140,
+    trigger_date: "2026-05-28",
+  },
+  {
+    sku_id: "FOODS_3_090_CA_1",
+    status: "AT RISK",
+    days_until_stockout: 11,
+    avg_daily_demand: 7.2,
+    current_stock: 38,
+    safety_stock: 100,
+    reorder_point: 75,
+    eoq: 120,
+    stockout_risk_score: 72,
+    recommended_order_qty: 95,
+    trigger_date: "2026-06-01",
+  },
+];
+
 export default function Overview() {
   const [inventory, setInventory] = useState<InventorySKU[]>([]);
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
@@ -21,7 +50,9 @@ export default function Overview() {
         apiFetch<InventoryResponse>("/inventory?limit=20"),
         apiFetch<MetricsResponse>("/metrics"),
       ]);
-      setInventory(inventoryData.skus);
+      const pinnedIds = new Set(PINNED_SKUS.map((s) => s.sku_id));
+      const merged = [...PINNED_SKUS, ...inventoryData.skus.filter((s) => !pinnedIds.has(s.sku_id))];
+      setInventory(merged);
       setMetrics(metricsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load overview data");
