@@ -11,19 +11,59 @@ interface InsightCardData {
   demo?: boolean;
 }
 
-const demoSku: InventorySKU = {
-  sku_id: "FOODS_3_090_CA_1",
-  status: "AT RISK",
-  days_until_stockout: 11,
-  avg_daily_demand: 7.2,
-  current_stock: 38,
-  safety_stock: 100,
-  reorder_point: 75,
-  eoq: 120,
-  stockout_risk_score: 72,
-  recommended_order_qty: 95,
-  trigger_date: "2026-06-01",
-};
+const DEMO_CARDS: InsightCardData[] = [
+  {
+    sku: {
+      sku_id: "FOODS_3_090_CA_1",
+      status: "AT RISK",
+      days_until_stockout: 11,
+      avg_daily_demand: 7.2,
+      current_stock: 38,
+      safety_stock: 100,
+      reorder_point: 75,
+      eoq: 120,
+      stockout_risk_score: 72,
+      recommended_order_qty: 95,
+      trigger_date: "2026-06-01",
+    },
+    text: "Status: Stock at 38% of safety threshold with 11 days until projected stockout.\nTrend: Avg demand of 7.2 units/day; lag-7 and rolling_mean_28 are top demand drivers. Holiday event in 9 days may spike demand 2–3×.\nRecommendation: Place order of 95 units by 2026-06-01 to avoid stockout before next delivery.",
+    demo: true,
+  },
+  {
+    sku: {
+      sku_id: "HOUSEHOLD_1_009_TX_2",
+      status: "STOCKOUT IMMINENT",
+      days_until_stockout: 3,
+      avg_daily_demand: 4.1,
+      current_stock: 12,
+      safety_stock: 80,
+      reorder_point: 58,
+      eoq: 140,
+      stockout_risk_score: 95,
+      recommended_order_qty: 140,
+      trigger_date: "2026-05-28",
+    },
+    text: "Status: CRITICAL — only 3 days of stock remaining. Immediate action required.\nTrend: Demand of 4.1 units/day with strong weekly seasonality peaking on weekends. sell_price drop last week lifted demand 18%.\nRecommendation: Emergency order of 140 units (full EOQ). Contact supplier today — standard lead time of 7 days already exceeds current runway.",
+    demo: true,
+  },
+  {
+    sku: {
+      sku_id: "HOBBIES_2_022_WI_1",
+      status: "OK",
+      days_until_stockout: 45,
+      avg_daily_demand: 2.3,
+      current_stock: 104,
+      safety_stock: 35,
+      reorder_point: 16,
+      eoq: 55,
+      stockout_risk_score: 8,
+      recommended_order_qty: 0,
+      trigger_date: "2026-07-09",
+    },
+    text: "Status: Healthy — 45 days of runway well above the 7-day lead time buffer.\nTrend: Low but stable demand of 2.3 units/day. Seasonal uplift expected in July (lag_364 shows +35% prior-year July spike for hobbies category).\nRecommendation: No action needed. Monitor from 2026-07-09; pre-position ~55 units ahead of seasonal uplift to avoid rush ordering.",
+    demo: true,
+  },
+];
 
 export default function InsightsFeed() {
   const [apiKey, setApiKey] = useState("");
@@ -95,7 +135,7 @@ export default function InsightsFeed() {
 
   if (!apiKey) {
     return (
-      <div className="max-w-3xl rounded-xl border border-[#E2E8F0] bg-white p-6 shadow-sm">
+      <div className="max-w-6xl rounded-xl border border-[#E2E8F0] bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-[#0F172A]">🔑 LLM Insight Feed</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[#64748B]">
           Enter an API key to generate AI-powered supply chain narratives for your at-risk SKUs.
@@ -120,7 +160,11 @@ export default function InsightsFeed() {
           <div className="h-px flex-1 bg-[#E2E8F0]" />
         </div>
 
-        <InsightArticle demo sku={demoSku} text={<DemoInsightText />} />
+        <div className="grid grid-cols-3 gap-4">
+          {DEMO_CARDS.map(({ sku, text, demo }) => (
+            <InsightArticle key={sku.sku_id} demo={demo} sku={sku} text={text} />
+          ))}
+        </div>
         <p className="mt-3 text-sm text-[#64748B]">↑ This is what your insights will look like</p>
       </div>
     );
@@ -168,9 +212,11 @@ function InsightArticle({ sku, text, demo }: InsightCardData) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-[#0F172A]">{sku.sku_id}</h3>
-          {demo ? <span className="rounded-full bg-[#F1F5F9] px-2 py-0.5 text-xs font-semibold text-[#64748B]">Demo</span> : null}
         </div>
-        <StatusBadge status={sku.status} />
+        <div className="flex items-center gap-2">
+          {demo ? <span className="rounded-full bg-[#F1F5F9] px-2 py-0.5 text-xs font-semibold text-[#64748B]">Demo</span> : null}
+          <StatusBadge status={sku.status} />
+        </div>
       </div>
       {typeof text === "string" ? <p className="mt-4 text-sm leading-6 text-[#334155]">{text}</p> : <div className="mt-4 text-sm leading-6 text-[#334155]">{text}</div>}
       <div className="mt-5 flex items-center justify-between border-t border-[#E2E8F0] pt-4 text-xs font-semibold text-[#64748B]">
@@ -178,23 +224,6 @@ function InsightArticle({ sku, text, demo }: InsightCardData) {
         <span>Order Qty: {Math.round(sku.recommended_order_qty).toLocaleString()}</span>
       </div>
     </article>
-  );
-}
-
-function DemoInsightText() {
-  return (
-    <div className="space-y-3">
-      <p>
-        <span className="font-semibold text-[#0F172A]">Status:</span> Stock at 38% of safety threshold with 11 days until projected stockout.
-      </p>
-      <p>
-        <span className="font-semibold text-[#0F172A]">Trend:</span> Avg demand of 7.2 units/day; lag-7 and rolling_mean_28 are top demand drivers. Holiday
-        event in 9 days may spike demand 2–3×.
-      </p>
-      <p>
-        <span className="font-semibold text-[#0F172A]">Recommendation:</span> Place order of 95 units by 2026-06-01 to avoid stockout before next delivery.
-      </p>
-    </div>
   );
 }
 

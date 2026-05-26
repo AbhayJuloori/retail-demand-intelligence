@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -33,6 +34,8 @@ app = FastAPI(title="Retail Demand Intelligence API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 _llm_client = LLMClient()
+_inventory_cache: dict[str, tuple[list, float]] = {}
+_INVENTORY_CACHE_TTL = 300  # 5 minutes
 
 
 @app.get("/health")
@@ -122,6 +125,14 @@ def inventory_summary(run_id: Optional[str] = None, limit: int = 100, current_st
     except Exception as e:
         raise HTTPException(503, detail=f"Could not load ML artifacts: {e}") from e
 
+    resolved_run_id = run_id
+    _cache_key = f'{resolved_run_id or "latest"}:{limit}:{current_stock}'
+    cached = _inventory_cache.get(_cache_key)
+    if cached is not None:
+        data, ts = cached
+        if _time.time() - ts < _INVENTORY_CACHE_TTL:
+            return {"skus": data, "total": len(data)}
+
     skus = list(prophet_models.keys())[:limit]
     results = []
     for sku_id in skus:
@@ -132,6 +143,7 @@ def inventory_summary(run_id: Optional[str] = None, limit: int = 100, current_st
         except Exception:
             pass
     results.sort(key=lambda x: x.get("days_until_stockout", 999))
+    _inventory_cache[_cache_key] = (results, _time.time())
     return {"skus": results, "total": len(results)}
 
 

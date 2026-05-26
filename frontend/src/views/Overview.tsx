@@ -49,13 +49,41 @@ export default function Overview() {
         <KPICard title="Stockout Imminent" value={stockout.toLocaleString()} note="Critical reorder window" tone="red" />
       </section>
 
+      <section className="grid grid-cols-3 gap-4">
+        <RiskBand label="Stockout Imminent" count={stockout} total={inventory.length} color="red" />
+        <RiskBand label="At Risk" count={atRisk} total={inventory.length} color="amber" />
+        <RiskBand label="OK" count={inventory.length - atRisk - stockout} total={inventory.length} color="green" />
+      </section>
+
       <section>
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-[#0F172A]">Inventory Risk Table</h2>
-          <p className="mt-1 text-sm text-[#64748B]">Top 20 SKUs by stockout risk.</p>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Top {Math.min(inventory.length, 20)} SKUs — {stockout} critical, {atRisk} at risk
+          </p>
         </div>
         <InventoryRows skus={inventory} />
       </section>
+    </div>
+  );
+}
+
+function RiskBand({ label, count, total, color }: { label: string; count: number; total: number; color: "red" | "amber" | "green" }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  const barColor = color === "red" ? "bg-red-500" : color === "amber" ? "bg-amber-400" : "bg-green-500";
+  const bgColor = color === "red" ? "bg-red-50 border-red-200" : color === "amber" ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200";
+  const textColor = color === "red" ? "text-red-700" : color === "amber" ? "text-amber-700" : "text-green-700";
+
+  return (
+    <div className={"rounded-xl border p-4 " + bgColor}>
+      <p className={"text-xs font-semibold uppercase tracking-wider " + textColor}>{label}</p>
+      <p className={"mt-1 text-3xl font-bold " + textColor}>{count}</p>
+      <div className="mt-3 h-2 w-full rounded-full bg-white/60">
+        <div className={"h-2 rounded-full transition-all " + barColor} style={{ width: pct + "%" }} />
+      </div>
+      <p className={"mt-1 text-xs font-medium " + textColor}>
+        {pct}% of {total} SKUs loaded
+      </p>
     </div>
   );
 }

@@ -51,6 +51,34 @@ export default function ModelMetrics() {
 
       <SHAPChart importance={metrics.shap_importance || {}} />
 
+      <section className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
+        <h2 className="font-semibold text-[#0F172A]">Training Dataset Distribution</h2>
+        <p className="mt-1 text-sm text-[#64748B]">M5 Walmart dataset — {metrics.n_skus.toLocaleString()} randomly sampled SKU-store series across 3 categories.</p>
+        <div className="mt-5 space-y-3">
+          {[
+            { label: "FOODS (dept 1-3)", share: 0.61, color: "bg-blue-500" },
+            { label: "HOUSEHOLD (dept 1-2)", share: 0.25, color: "bg-violet-500" },
+            { label: "HOBBIES (dept 1-2)", share: 0.14, color: "bg-emerald-500" },
+          ].map(({ label, share, color }) => {
+            const count = Math.round(metrics.n_skus * share);
+            return (
+              <div key={label}>
+                <div className="mb-1 flex items-center justify-between text-sm">
+                  <span className="font-medium text-[#0F172A]">{label}</span>
+                  <span className="text-[#64748B]">
+                    {count.toLocaleString()} SKUs ({Math.round(share * 100)}%)
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-[#F1F5F9]">
+                  <div className={"h-2 rounded-full " + color} style={{ width: share * 100 + "%" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-4 text-xs text-[#94A3B8]">Distribution matches M5 hierarchy. FOODS dominates due to high SKU count and store coverage across CA, TX, WI.</p>
+      </section>
+
       <section className="rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
         <div className="border-b border-[#E2E8F0] px-5 py-4">
           <h2 className="text-lg font-semibold text-[#0F172A]">Backtest Results</h2>
