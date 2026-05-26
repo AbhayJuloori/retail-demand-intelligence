@@ -12,37 +12,71 @@ export default function SHAPChart({ importance }: { importance: Record<string, n
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border border-[#E2E8F0] bg-white p-8 text-center text-[#64748B] shadow-sm">
-        No SHAP feature importance data
+      <div className="flex h-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-400 shadow-sm">
+        No SHAP feature importance data available
       </div>
     );
   }
 
+  const maxVal = rows[0][1];
+
   return (
-    <div className="h-[420px] rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-[#0F172A]">SHAP Feature Importance</h2>
-      <Bar
-        data={{
-          labels: rows.map(([feature]) => feature),
-          datasets: [
-            {
-              label: "Importance",
-              data: rows.map(([, value]) => value),
-              backgroundColor: "#2563EB",
-              borderRadius: 6,
+    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-900">Feature Importance</h2>
+      <p className="mt-0.5 text-xs text-slate-400">
+        Top 10 features by mean absolute SHAP value — higher means more influence on forecast accuracy.
+      </p>
+      <div className="mt-5 h-[320px]">
+        <Bar
+          data={{
+            labels: rows.map(([feature]) =>
+              feature.replace(/_/g, " ").replace(/lag (\d+)/, "lag-$1 day"),
+            ),
+            datasets: [
+              {
+                label: "SHAP importance",
+                data: rows.map(([, value]) => value),
+                backgroundColor: rows.map(([, value]) => {
+                  const pct = value / maxVal;
+                  return pct > 0.7 ? "#2563eb" : pct > 0.4 ? "#3b82f6" : "#93c5fd";
+                }),
+                borderRadius: 4,
+                borderSkipped: false,
+              },
+            ],
+          }}
+          options={{
+            indexAxis: "y",
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: "#0f172a",
+                titleColor: "#94a3b8",
+                bodyColor: "#f1f5f9",
+                padding: 10,
+                cornerRadius: 8,
+                callbacks: {
+                  label: (ctx) => ` ${(ctx.raw as number).toFixed(4)}`,
+                },
+              },
             },
-          ],
-        }}
-        options={{
-          indexAxis: "y",
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { color: "#64748B" }, grid: { color: "#E2E8F0" } },
-            y: { ticks: { color: "#64748B" }, grid: { display: false } },
-          },
-        }}
-      />
-    </div>
+            scales: {
+              x: {
+                ticks: { color: "#94a3b8", font: { size: 11 } },
+                grid: { color: "#f1f5f9" },
+                border: { display: false },
+              },
+              y: {
+                ticks: { color: "#64748b", font: { size: 11 } },
+                grid: { display: false },
+                border: { display: false },
+              },
+            },
+          }}
+        />
+      </div>
+    </section>
   );
 }

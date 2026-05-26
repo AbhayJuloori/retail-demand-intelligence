@@ -17,55 +17,91 @@ import type { ForecastRow } from "../lib/types";
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 export default function ForecastChart({ forecast }: { forecast: ForecastRow[] }) {
-  const labels = forecast.map((row) => row.date);
-  const data = {
-    labels,
-    datasets: [
-      {
-        label: "Confidence Lower",
-        data: forecast.map((row) => row.yhat_lower),
-        borderColor: "rgba(37, 99, 235, 0)",
-        backgroundColor: "rgba(37, 99, 235, 0)",
-        pointRadius: 0,
-      },
-      {
-        label: "Confidence Band",
-        data: forecast.map((row) => row.yhat_upper),
-        borderColor: "rgba(37, 99, 235, 0)",
-        backgroundColor: "rgba(37, 99, 235, 0.14)",
-        fill: "-1",
-        pointRadius: 0,
-      },
-      {
-        label: "Blended Forecast",
-        data: forecast.map((row) => row.blended ?? row.yhat),
-        borderColor: "#2563EB",
-        backgroundColor: "#2563EB",
-        borderWidth: 2,
-        pointRadius: 2,
-        tension: 0.3,
-      },
-    ],
-  };
+  if (forecast.length === 0) {
+    return (
+      <div className="flex h-[280px] items-center justify-center text-sm text-slate-400">
+        No forecast data
+      </div>
+    );
+  }
+
+  const labels = forecast.map((r) => {
+    const d = new Date(r.date);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  });
 
   return (
-    <div className="h-[340px] rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
+    <div className="h-[280px]">
       <Line
-        data={data}
+        data={{
+          labels,
+          datasets: [
+            {
+              label: "Lower bound",
+              data: forecast.map((r) => r.yhat_lower),
+              borderColor: "transparent",
+              backgroundColor: "transparent",
+              pointRadius: 0,
+              fill: false,
+            },
+            {
+              label: "Confidence band",
+              data: forecast.map((r) => r.yhat_upper),
+              borderColor: "transparent",
+              backgroundColor: "rgba(37, 99, 235, 0.08)",
+              fill: "-1",
+              pointRadius: 0,
+            },
+            {
+              label: "Forecast",
+              data: forecast.map((r) => r.blended ?? r.yhat),
+              borderColor: "#2563eb",
+              backgroundColor: "#2563eb",
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              tension: 0.35,
+            },
+          ],
+        }}
         options={{
           maintainAspectRatio: false,
+          animation: false,
           interaction: { intersect: false, mode: "index" },
           plugins: {
             legend: {
               labels: {
-                color: "#64748B",
-                filter: (item) => item.text !== "Confidence Lower",
+                color: "#94a3b8",
+                font: { size: 11 },
+                usePointStyle: true,
+                pointStyleWidth: 8,
+                filter: (item) => item.text !== "Lower bound" && item.text !== "Confidence band",
               },
+            },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#94a3b8",
+              bodyColor: "#f1f5f9",
+              padding: 10,
+              cornerRadius: 8,
             },
           },
           scales: {
-            x: { ticks: { color: "#64748B", maxRotation: 0 }, grid: { color: "#F1F5F9" } },
-            y: { ticks: { color: "#64748B" }, grid: { color: "#E2E8F0" } },
+            x: {
+              ticks: {
+                color: "#94a3b8",
+                font: { size: 11 },
+                maxRotation: 0,
+                maxTicksLimit: 8,
+              },
+              grid: { color: "#f1f5f9" },
+              border: { display: false },
+            },
+            y: {
+              ticks: { color: "#94a3b8", font: { size: 11 } },
+              grid: { color: "#f1f5f9" },
+              border: { display: false },
+            },
           },
         }}
       />
