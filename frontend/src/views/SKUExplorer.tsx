@@ -5,7 +5,7 @@ import ForecastChart from "../components/ForecastChart";
 import Spinner from "../components/Spinner";
 import { apiFetch } from "../lib/api";
 import { DEMO_SKUS } from "../lib/demo";
-import type { ForecastResponse, ForecastRow, InventoryResponse, InventorySKU } from "../lib/types";
+import type { ForecastResponse, ForecastRow, InventorySKU } from "../lib/types";
 
 function statusDot(status: string) {
   if (status === "STOCKOUT IMMINENT") return "bg-red-500";
@@ -60,14 +60,7 @@ export default function SKUExplorer() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
-  /* Load real SKU list if API is reachable — fall back to DEMO_SKUS silently */
-  useEffect(() => {
-    apiFetch<InventoryResponse>("/inventory?limit=30")
-      .then((data) => {
-        if (data.skus.length > 0) setSkus(data.skus);
-      })
-      .catch(() => null);
-  }, []);
+  /* Left panel always shows the curated DEMO_SKUS — real API is called per-SKU for forecast only */
 
   /* Load forecast whenever selected SKU changes */
   useEffect(() => {

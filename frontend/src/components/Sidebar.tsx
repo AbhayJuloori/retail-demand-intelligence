@@ -47,7 +47,7 @@ export function Sidebar() {
       {/* Wordmark */}
       <div className="flex h-14 items-center border-b border-slate-800 px-5">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-500">
+          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600">
             <svg className="h-3.5 w-3.5 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3.5 18.5l6-6 4 4L22 6.92" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>

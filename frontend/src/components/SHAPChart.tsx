@@ -38,7 +38,7 @@ export default function SHAPChart({ importance }: { importance: Record<string, n
                 data: rows.map(([, value]) => value),
                 backgroundColor: rows.map(([, value]) => {
                   const pct = value / maxVal;
-                  return pct > 0.7 ? "#2563eb" : pct > 0.4 ? "#3b82f6" : "#93c5fd";
+                  return pct > 0.7 ? "#4f46e5" : pct > 0.4 ? "#6366f1" : "#a5b4fc";
                 }),
                 borderRadius: 4,
                 borderSkipped: false,

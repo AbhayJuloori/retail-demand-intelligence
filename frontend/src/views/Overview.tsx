@@ -195,7 +195,7 @@ function KPICard({ label, value, sub, color }: { label: string; value: string | 
     red: "text-red-600",
     amber: "text-amber-600",
     green: "text-emerald-600",
-    blue: "text-blue-600",
+    blue: "text-indigo-600",
   }[color];
 
   return (
