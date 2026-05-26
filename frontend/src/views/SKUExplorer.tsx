@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import ForecastChart from "../components/ForecastChart";
 import Spinner from "../components/Spinner";
 import StatusBadge from "../components/StatusBadge";
@@ -13,23 +13,30 @@ export default function SKUExplorer() {
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
   const [insight, setInsight] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [apiKeyDraft, setApiKeyDraft] = useState("");
+  const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [insightLoading, setInsightLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setApiKey(localStorage.getItem("llm_api_key") || "");
-    loadInventory();
+    const storedKey = localStorage.getItem("llm_api_key") || "";
+    setApiKey(storedKey);
+    setApiKeyDraft(storedKey);
   }, []);
+
+  useEffect(() => {
+    loadInventory();
+  }, [limit]);
 
   async function loadInventory() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<InventoryResponse>("/inventory?limit=100");
+      const data = await apiFetch<InventoryResponse>(`/inventory?limit=${limit}`);
       setSkus(data.skus);
-      setSelectedSku(data.skus[0]?.sku_id || "");
+      setSelectedSku((current) => current || data.skus[0]?.sku_id || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load SKUs");
     } finally {
@@ -45,9 +52,10 @@ export default function SKUExplorer() {
   }, [selectedSku]);
 
   useEffect(() => {
-    if (!forecast?.inventory_state || !apiKey) return;
-    loadInsight(forecast.inventory_state, apiKey);
-  }, [forecast?.sku_id, apiKey]);
+    const sku = forecast?.inventory_state || selectedInventory;
+    if (!sku || !apiKey) return;
+    loadInsight(sku, apiKey);
+  }, [forecast?.sku_id, selectedInventory?.sku_id, apiKey]);
 
   async function loadForecast(skuId: string) {
     setDetailLoading(true);
@@ -94,6 +102,13 @@ export default function SKUExplorer() {
     localStorage.setItem("llm_api_key", value);
   }
 
+  function submitApiKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = apiKeyDraft.trim();
+    if (!value) return;
+    saveApiKey(value);
+  }
+
   if (loading) return <Spinner />;
   if (error && skus.length === 0) return <ErrorState message={error} onRetry={loadInventory} />;
 
@@ -101,26 +116,35 @@ export default function SKUExplorer() {
 
   return (
     <div className="grid h-[calc(100vh-112px)] grid-cols-[1fr_2fr] gap-5">
-      <aside className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
-        <div className="border-b border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
-          <h2 className="font-semibold text-[#0F172A]">SKU IDs</h2>
-        </div>
-        <div className="max-h-full overflow-y-auto p-2">
-          {skus.map((sku) => (
-            <button
-              key={sku.sku_id}
-              className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-3 text-left ${
-                selectedSku === sku.sku_id ? "bg-[#EFF6FF] ring-1 ring-[#2563EB]" : "hover:bg-[#F8FAFC]"
-              }`}
-              onClick={() => setSelectedSku(sku.sku_id)}
-            >
-              <span>
-                <span className="block text-sm font-semibold text-[#0F172A]">{sku.sku_id}</span>
-                <span className="mt-1 block text-xs text-[#64748B]">{sku.days_until_stockout} days</span>
-              </span>
-              <StatusBadge status={sku.status} />
-            </button>
-          ))}
+      <aside className="flex overflow-hidden rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="border-b border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+            <h2 className="font-semibold text-[#0F172A]">SKU IDs</h2>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {skus.map((sku) => (
+              <button
+                key={sku.sku_id}
+                className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-3 text-left ${
+                  selectedSku === sku.sku_id ? "bg-[#EFF6FF] ring-1 ring-[#2563EB]" : "hover:bg-[#F8FAFC]"
+                }`}
+                onClick={() => setSelectedSku(sku.sku_id)}
+              >
+                <span>
+                  <span className="block text-sm font-semibold text-[#0F172A]">{sku.sku_id}</span>
+                  <span className="mt-1 block text-xs text-[#64748B]">{sku.days_until_stockout} days</span>
+                </span>
+                <StatusBadge status={sku.status} />
+              </button>
+            ))}
+          </div>
+          {skus.length === limit ? (
+            <div className="border-t border-[#E2E8F0] p-3">
+              <button className="w-full rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white" onClick={() => setLimit((value) => value + 20)}>
+                Load More
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
 
@@ -158,12 +182,24 @@ export default function SKUExplorer() {
                 </button>
               </div>
               {!apiKey ? (
-                <input
-                  className="mb-4 w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm outline-none focus:border-[#2563EB]"
-                  placeholder="Enter API key for LLM insights"
-                  type="password"
-                  onBlur={(event) => saveApiKey(event.target.value)}
-                />
+                <form className="mb-4 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3" onSubmit={submitApiKey}>
+                  <p className="text-sm text-[#64748B]">No API key set — enter to generate AI insight</p>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      className="min-w-0 flex-1 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm outline-none focus:border-[#2563EB]"
+                      placeholder="API key"
+                      type="password"
+                      value={apiKeyDraft}
+                      onChange={(event) => setApiKeyDraft(event.target.value)}
+                    />
+                    <button className="rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white" type="submit">
+                      Save
+                    </button>
+                  </div>
+                  <p className="mt-3 text-sm italic leading-6 text-[#64748B]">
+                    Status: [AT RISK] with 11 days until stockout. Trend: Holiday demand spike expected. Recommendation: Order 95 units by Jun 1.
+                  </p>
+                </form>
               ) : null}
               <p className="min-h-[80px] text-sm leading-6 text-[#334155]">
                 {insightLoading ? "Generating insight..." : insight || "No insight generated yet."}

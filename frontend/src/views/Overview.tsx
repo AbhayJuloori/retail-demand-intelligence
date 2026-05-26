@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import InventoryRows from "../components/InventoryTable";
 import KPICard from "../components/KPICard";
 import Spinner from "../components/Spinner";
@@ -18,7 +18,7 @@ export default function Overview() {
     setError(null);
     try {
       const [inventoryData, metricsData] = await Promise.all([
-        apiFetch<InventoryResponse>("/inventory?limit=100"),
+        apiFetch<InventoryResponse>("/inventory?limit=20"),
         apiFetch<MetricsResponse>("/metrics"),
       ]);
       setInventory(inventoryData.skus);
@@ -34,10 +34,6 @@ export default function Overview() {
     load();
   }, []);
 
-  const topRisk = useMemo(
-    () => [...inventory].sort((a, b) => a.days_until_stockout - b.days_until_stockout).slice(0, 20),
-    [inventory],
-  );
   const atRisk = inventory.filter((sku) => sku.status === "AT RISK").length;
   const stockout = inventory.filter((sku) => sku.status === "STOCKOUT IMMINENT").length;
 
@@ -56,9 +52,9 @@ export default function Overview() {
       <section>
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-[#0F172A]">Inventory Risk Table</h2>
-          <p className="mt-1 text-sm text-[#64748B]">Top 20 SKUs sorted by days until stockout.</p>
+          <p className="mt-1 text-sm text-[#64748B]">Top 20 SKUs by stockout risk.</p>
         </div>
-        <InventoryRows skus={topRisk} />
+        <InventoryRows skus={inventory} />
       </section>
     </div>
   );

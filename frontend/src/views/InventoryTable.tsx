@@ -26,6 +26,7 @@ export default function InventoryTable() {
   const [status, setStatus] = useState("All");
   const [sortKey, setSortKey] = useState<SortKey>("days_until_stockout");
   const [ascending, setAscending] = useState(true);
+  const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +34,7 @@ export default function InventoryTable() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<InventoryResponse>("/inventory?limit=100");
+      const data = await apiFetch<InventoryResponse>(`/inventory?limit=${limit}`);
       setSkus(data.skus);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load inventory");
@@ -44,7 +45,7 @@ export default function InventoryTable() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [limit]);
 
   const visibleSkus = useMemo(() => {
     const filtered = skus.filter((sku) => {
@@ -101,6 +102,13 @@ export default function InventoryTable() {
         </div>
       </section>
       <InventoryRows skus={visibleSkus} />
+      {skus.length === limit ? (
+        <div className="flex justify-center">
+          <button className="rounded-lg bg-[#2563EB] px-5 py-2 text-sm font-semibold text-white" onClick={() => setLimit((value) => value + 20)}>
+            Load More
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
