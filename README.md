@@ -11,10 +11,10 @@ End-to-end inventory forecasting system built on the [M5 Walmart dataset](https:
 | Feature | Details |
 |---|---|
 | **Demand forecasting** | 28-day rolling forecast per SKU using a blended Prophet + LightGBM model |
-| **Stockout risk** | Days-to-stockout, reorder point, safety stock, EOQ — computed from forecasted demand |
-| **LLM insights** | Plain-English inventory narratives generated via Groq (llama-3.3-70b) — runs directly from the browser, no backend required |
+| **Stockout risk** | Days-to-stockout, reorder point, safety stock, EOQ, computed from forecasted demand |
+| **LLM insights** | Plain-English inventory narratives generated via Groq (llama-3.3-70b), runs directly from the browser, no backend required |
 | **Model explainability** | SHAP feature importance tracked per training run in MLflow |
-| **Static dashboard** | Next.js 15 static export, deployable to GitHub Pages — no server needed for the UI |
+| **Static dashboard** | Next.js 15 static export, deployable to GitHub Pages, no server needed for the UI |
 
 ---
 
@@ -31,7 +31,7 @@ The ensemble achieves **WRMSSE 0.636** on a 2,000-SKU validation sample:
 | M5 competition top 10% | 0.57 | Kaggle leaderboard |
 | M5 competition winner | 0.50 | Best known result |
 
-WRMSSE is the official M5 competition metric. A score of 1.0 = no better than naïve seasonal repeat; lower is better. This model cuts error **36% below baseline** — competitive with a well-tuned single-model approach on the full dataset despite being trained on only ~7% of the available series.
+WRMSSE is the official M5 competition metric. A score of 1.0 = no better than naïve seasonal repeat; lower is better. This model cuts error **36% below baseline**, competitive with a well-tuned single-model approach on the full dataset despite being trained on only ~7% of the available series.
 
 ---
 
@@ -83,13 +83,13 @@ M5 Walmart Dataset (30,490 SKUs × 5 years of daily sales)
 
 ## Dashboard pages
 
-**Overview** — KPI strip (stockout imminent / at risk / healthy), animated risk distribution bar, filterable inventory table sorted by urgency.
+**Overview**: KPI strip (stockout imminent / at risk / healthy), animated risk distribution bar, filterable inventory table sorted by urgency.
 
-**SKU Explorer** — drill into any SKU: status header, 4 inventory metrics (current stock, safety stock, ROP, EOQ), 28-day demand forecast chart.
+**SKU Explorer**: drill into any SKU for its status header, 4 inventory metrics (current stock, safety stock, ROP, EOQ), 28-day demand forecast chart.
 
-**Insight Feed** — connect a Groq API key (free, runs browser-side) to get 2–3 sentence plain-English narratives for your highest-risk SKUs — what's driving the risk, the specific timing, and the exact order quantity.
+**Insight Feed**: connect a Groq API key (free, runs browser-side) to get 2–3 sentence plain-English narratives for your highest-risk SKUs: what's driving the risk, the specific timing, and the exact order quantity.
 
-**Model Metrics** — WRMSSE explained, benchmark comparison table, SHAP bar chart, training dataset breakdown.
+**Model Metrics**: WRMSSE explained, benchmark comparison table, SHAP bar chart, training dataset breakdown.
 
 ---
 
@@ -97,9 +97,9 @@ M5 Walmart Dataset (30,490 SKUs × 5 years of daily sales)
 
 | Layer | Technology |
 |---|---|
-| ML — forecasting | Prophet + LightGBM (Tweedie) ensemble |
-| ML — experiment tracking | MLflow |
-| ML — explainability | SHAP |
+| ML: forecasting | Prophet + LightGBM (Tweedie) ensemble |
+| ML: experiment tracking | MLflow |
+| ML: explainability | SHAP |
 | Feature engineering | pandas, numpy |
 | Inventory math | custom (ROP, safety stock, EOQ) |
 | API | FastAPI + uvicorn |
@@ -137,14 +137,14 @@ npm install
 npm run dev          # dev server at http://localhost:3000
 ```
 
-**Environment variables** — copy `.env.example` to `.env`:
+**Environment variables**: copy `.env.example` to `.env`:
 
 ```
 LLM_PROVIDER=groq          # groq | openai | anthropic | gemini
 GROQ_API_KEY=gsk_...
 ```
 
-The dashboard also supports **Bring Your Own Key** — enter a Groq API key in the Insight Feed UI. It's stored in localStorage only and goes directly from your browser to Groq's API.
+The dashboard also supports **Bring Your Own Key**: enter a Groq API key in the Insight Feed UI. It's stored in localStorage only and goes directly from your browser to Groq's API.
 
 ---
 
@@ -196,6 +196,6 @@ retail-demand-intelligence/
 
 ## Caveats
 
-- M5 doesn't include real inventory records — starting stock is seeded synthetically from historical sales patterns.
+- M5 doesn't include real inventory records; starting stock is seeded synthetically from historical sales patterns.
 - WRMSSE here uses a simplified global scale rather than the full M5 hierarchy × dollar-volume weighting, so direct comparison to Kaggle leaderboard scores is approximate.
 - Prophet training is ~1 min per SKU; the 2,000-SKU sample was chosen to keep total training time under an hour.
